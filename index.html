@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QITC 2026: Dragonwing Edge Governance (Non-Blocking)</title>
+    <title>QITC 2026: Edge Governance Rulepack (Final)</title>
     
     <!-- 0. Critical Error Handler -->
     <script>
@@ -128,7 +128,7 @@
             return (
                 <div className="h-full bg-[#0a0f1c] font-mono text-xs p-3 overflow-y-auto text-slate-300 custom-scrollbar rounded-b-lg">
                 <div className="text-slate-500 mb-3 pb-2 border-b border-slate-800 flex justify-between">
-                    <span>admin@dragonwing-platform:~# tail -f /var/log/q_governance.log</span>
+                    <span>admin@dragonwing-platform:~# tail -f /var/log/rulepack.log</span>
                     <span className="text-[10px] text-slate-600">Baud: 115200</span>
                 </div>
                 {logs.map((log, i) => (
@@ -187,7 +187,6 @@
                         addTermLog("SYNC", "BATCH UPLOADING TO QUALCOMM CLOUD...");
                         await delay(1000);
                         
-                        // Process the first queued item
                         const item = pendingQueue[0];
                         if (item.type === 'HUMAN_LOOP') {
                             addTermLog("SYNC", "VIOLATION #882 TRIGGERED CLOUD ALERT.");
@@ -233,8 +232,8 @@
                 
                 await delay(800);
                 setStep(2); 
-                setHighlightRuleLine(6);
-                addTermLog("OK", "Policy Re-evaluation: PASSED");
+                setHighlightRuleLine(7); // Highlight rulepack line
+                addTermLog("OK", "Rulepack Re-evaluation: PASSED");
                 await delay(600);
                 setStep(4);
                 addTermLog("EXEC", "Executing safe query...");
@@ -245,9 +244,11 @@
                 reset();
             };
 
+            // RENAME: Changed from "policy_id" to "rulepack_id" for safety
             const rulePackCode = `{
   "target_platform": "Dragonwing_v1",
-  "policy_id": "Q_EDGE_SEC_2026",
+  "rulepack_id": "Q_EDGE_SEC_2026",
+  "rulepack_ver": "v1.2.4 (Signed)",
   "rules": [
     { 
       "action": "NPU_INFERENCE", 
@@ -302,9 +303,9 @@ Content-Type: application/json
                 addTermLog("INFO", "Validating Q-Signature via Secure Processing Unit...");
                 await delay(600);
                 setStep(2);
-                addTermLog("SYS", "Loading Policy: Q_EDGE_SEC_2026 (Local Cache)...");
+                addTermLog("SYS", "Loading Rulepack: Q_EDGE_SEC_2026 (Local Cache)...");
                 await delay(500);
-                setHighlightRuleLine(6); 
+                setHighlightRuleLine(7); 
                 addTermLog("OK", "MATCH: Trusted Model from Qualcomm® AI Hub");
                 await delay(1000);
                 setStep(4); 
@@ -334,14 +335,12 @@ Content-Type: application/json
                 setStep(2);
                 addTermLog("SYS", "Parsing syntax complexity...");
                 await delay(600);
-                setHighlightRuleLine(11);
+                setHighlightRuleLine(12);
                 addTermLog("WARN", "VIOLATION: Unbounded query on Edge Node");
                 
-                // OFFLINE PATH (NON-BLOCKING)
                 if (!isOnline) {
                     addTermLog("WARN", "OFFLINE DETECTED: Unable to reach Human Admin.");
                     await delay(500);
-                    // Generate Unique ID for the queue item
                     const queueId = '882_' + (pendingQueue.length + 1);
                     addTermLog("SYS", `Action QUEUED in TrustZone Storage (ID: ${queueId}).`);
                     addTermLog("SYS", "System returning to IDLE state for next instruction.");
@@ -349,13 +348,11 @@ Content-Type: application/json
                     setExecutionHash("QUEUED_" + queueId);
                     setStep(4);
                     
-                    // AUTO-RESET LOGIC (Non-Blocking)
                     await delay(2000);
                     reset();
                     return; 
                 }
 
-                // ONLINE PATH
                 addTermLog("WARN", "Invoking QITC Operator Intervention...");
                 await delay(1000);
                 setStep(3);
@@ -364,7 +361,7 @@ Content-Type: application/json
                     fixed: "SELECT * FROM sensor_logs LIMIT 100"
                 });
                 setShowReviewModal(true);
-                addTermLog("WAIT", "Waiting for Dragonwing Admin...");
+                addTermLog("WAIT", "Waiting for Admin Approval...");
             };
 
             const runScenario3 = async () => {
@@ -382,9 +379,9 @@ Content-Type: application/json
                 addTermLog("WARN", "Privileged Hardware Access Detected");
                 await delay(800);
                 setStep(2);
-                addTermLog("SYS", "Scanning against TrustZone® policy (Local)...");
+                addTermLog("SYS", "Scanning against TrustZone® Rulepack (Local)...");
                 await delay(600);
-                setHighlightRuleLine(16); 
+                setHighlightRuleLine(17); 
                 addTermLog("ERR", "CRITICAL BLOCK: Rule #3 (DENY)");
                 addTermLog("ERR", "Attempt to bypass Secure Boot Chain.");
                 await delay(1000);
@@ -541,7 +538,7 @@ Content-Type: application/json
                             <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
                                 <h3 className="text-sm font-bold text-indigo-100 flex items-center gap-2">
                                     <QIcon name="ShieldCheck" className="w-4 h-4 text-indigo-400" />
-                                    Dragonwing Policy
+                                    Edge Governance Rulepack
                                 </h3>
                                 <StatusBadge status={step === 2 ? "PROCESSING" : step === 3 ? "WARNING" : "IDLE"} />
                             </div>
