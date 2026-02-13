@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QITC 2026: Dragonwing Edge Governance (Store & Forward)</title>
+    <title>QITC 2026: Dragonwing Edge Governance (Non-Blocking)</title>
     
     <!-- 0. Critical Error Handler -->
     <script>
@@ -164,7 +163,7 @@
             const [reviewDiff, setReviewDiff] = useState({ original: "", fixed: "" });
             const [executionHash, setExecutionHash] = useState("Waiting...");
             const [isOnline, setIsOnline] = useState(true);
-            const [pendingQueue, setPendingQueue] = useState([]); // Store & Forward Queue
+            const [pendingQueue, setPendingQueue] = useState([]); 
             const [isSyncing, setIsSyncing] = useState(false);
 
             const delay = (ms) => new Promise(res => setTimeout(res, ms));
@@ -174,7 +173,6 @@
                 setTerminalLogs(prev => [...prev, { time, type, text }]);
             };
 
-            // Network Toggle & Sync Logic
             const toggleNetwork = async () => {
                 const nextState = !isOnline;
                 setIsOnline(nextState);
@@ -186,16 +184,15 @@
                         setIsSyncing(true);
                         await delay(800);
                         addTermLog("SYNC", `FOUND ${pendingQueue.length} PENDING AUDIT LOGS IN TRUSTZONE.`);
-                        addTermLog("SYNC", "UPLOADING TO QUALCOMM CLOUD...");
+                        addTermLog("SYNC", "BATCH UPLOADING TO QUALCOMM CLOUD...");
                         await delay(1000);
                         
-                        // Process the first queued item (Human Loop Simulation)
+                        // Process the first queued item
                         const item = pendingQueue[0];
                         if (item.type === 'HUMAN_LOOP') {
                             addTermLog("SYNC", "VIOLATION #882 TRIGGERED CLOUD ALERT.");
                             processPendingHumanLoop();
                         } else {
-                            // Just clear queue for others
                             setPendingQueue([]);
                             setIsSyncing(false);
                             addTermLog("OK", "SYNC COMPLETE.");
@@ -204,25 +201,24 @@
                         addTermLog("OK", "NO PENDING DATA.");
                     }
                 } else {
-                    addTermLog("SYS", "NETWORK INTERFACE DOWN. SWITCHING TO STORE-AND-FORWARD MODE.");
+                    addTermLog("SYS", "NETWORK INTERFACE DOWN. SWITCHING TO ASYNC STORE-AND-FORWARD MODE.");
                 }
             };
 
             const processPendingHumanLoop = async () => {
-                setStep(3); // Go to review state
+                setStep(3); 
                 setReviewDiff({
                     original: "SELECT * FROM sensor_logs",
                     fixed: "SELECT * FROM sensor_logs LIMIT 100"
                 });
                 setShowReviewModal(true);
                 addTermLog("WAIT", "Cloud Admin Reviewing Queued Violation...");
-                
-                // Keep the modal open until user approves
             };
 
             const handleCloudApproval = async () => {
                 setShowReviewModal(false);
-                setPendingQueue([]); // Clear queue
+                const count = pendingQueue.length;
+                setPendingQueue([]); 
                 setIsSyncing(false);
 
                 setCurrentInputCode(`POST /api/db/query
@@ -230,9 +226,9 @@
   "intent": "SQL_QUERY",
   "query": "SELECT * FROM sensor_logs LIMIT 100",
   "approver": "qitc_admin_cloud_01",
-  "sync_timestamp": "2026-02-14T10:00:00Z"
+  "sync_batch_size": ${count}
 }`);
-                addTermLog("OK", "Modification Signed by Cloud Admin.");
+                addTermLog("OK", `Batch Modification Signed by Cloud Admin.`);
                 addTermLog("INFO", "Executing Delayed Task...");
                 
                 await delay(800);
@@ -278,7 +274,6 @@
                 setShowReviewModal(false);
                 setCurrentInputCode("");
                 setExecutionHash("Waiting...");
-                // Note: We don't reset pendingQueue or isOnline to maintain state continuity
             };
 
             const runScenario1 = async () => {
@@ -342,15 +337,21 @@ Content-Type: application/json
                 setHighlightRuleLine(11);
                 addTermLog("WARN", "VIOLATION: Unbounded query on Edge Node");
                 
-                // OFFLINE PATH
+                // OFFLINE PATH (NON-BLOCKING)
                 if (!isOnline) {
                     addTermLog("WARN", "OFFLINE DETECTED: Unable to reach Human Admin.");
                     await delay(500);
-                    addTermLog("SYS", "Action STORED in TrustZone Storage (Encrypted).");
-                    setPendingQueue(prev => [...prev, { type: 'HUMAN_LOOP', id: '882' }]);
-                    setExecutionHash("QUEUED_ID_882");
+                    // Generate Unique ID for the queue item
+                    const queueId = '882_' + (pendingQueue.length + 1);
+                    addTermLog("SYS", `Action QUEUED in TrustZone Storage (ID: ${queueId}).`);
+                    addTermLog("SYS", "System returning to IDLE state for next instruction.");
+                    setPendingQueue(prev => [...prev, { type: 'HUMAN_LOOP', id: queueId }]);
+                    setExecutionHash("QUEUED_" + queueId);
                     setStep(4);
-                    // Do not reset automatically so user can see the queued state
+                    
+                    // AUTO-RESET LOGIC (Non-Blocking)
+                    await delay(2000);
+                    reset();
                     return; 
                 }
 
@@ -364,13 +365,6 @@ Content-Type: application/json
                 });
                 setShowReviewModal(true);
                 addTermLog("WAIT", "Waiting for Dragonwing Admin...");
-                
-                // Use a separate handler for online immediate approval
-                // ... logic is inside the modal button for this scenario too? 
-                // For simplicity, reusing handleCloudApproval but adjusting the logs slightly?
-                // Actually, let's keep the modal button generic "Approve Fix" which calls handleCloudApproval
-                // But we need to distinguish immediate vs delayed in logs if we want perfection.
-                // For now, handleCloudApproval works for both flows.
             };
 
             const runScenario3 = async () => {
@@ -402,8 +396,6 @@ Content-Type: application/json
                     addTermLog("AUDIT", "Report sent to Qualcomm Cloud.");
                 } else {
                     addTermLog("AUDIT", "Report cached in Secure Storage (1MB reserved).");
-                    // Optionally add to pending queue for audit logs
-                    // setPendingQueue(prev => [...prev, { type: 'AUDIT', id: 'Q992' }]);
                 }
                 await delay(3000);
                 reset();
@@ -455,7 +447,7 @@ Content-Type: application/json
                                         : "bg-transparent border-transparent text-slate-600"
                                     }`}>
                                         <QIcon name="CloudUpload" className="w-3 h-3" />
-                                        <span>Pending Uploads: {pendingQueue.length}</span>
+                                        <span>Pending: {pendingQueue.length}</span>
                                     </div>
                                 </div>
                             </div>
