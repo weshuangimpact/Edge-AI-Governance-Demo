@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QITC 2026: Edge Governance Rulepack (Final)</title>
+    <title>QITC 2026: Dragonwing Edge Governance (Zero Trust)</title>
     
     <!-- 0. Critical Error Handler -->
     <script>
         window.onerror = function(message, source, lineno, colno, error) {
-            document.body.innerHTML = `
-                <div style="background:#0f172a;color:#ef4444;padding:20px;height:100vh;font-family:monospace;">
-                    <h2>System Error</h2>
-                    <p>${message}</p>
-                    <small>${source}:${lineno}</small>
-                </div>
-            `;
+            var root = document.getElementById('root');
+            root.innerHTML = '<div style="background:#0f172a;color:#ef4444;padding:20px;height:100vh;font-family:monospace;overflow:auto;">' +
+                '<h2>System Error</h2>' +
+                '<p>' + message + '</p>' +
+                '<small>' + source + ':' + lineno + '</small>' +
+                '</div>';
         };
     </script>
 
@@ -56,7 +55,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 1. Internal SVG Icons ---
+        // --- 1. Internal SVG Icons (Using <g> for compatibility) ---
         const Icon = ({ path, color = "currentColor", size = 20, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {path}
@@ -65,18 +64,19 @@
 
         const Icons = {
             Shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
-            ShieldCheck: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></>,
-            Cpu: <><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M9 1v3" /><path d="M15 1v3" /><path d="M9 20v3" /><path d="M15 20v3" /><path d="M20 9h3" /><path d="M20 14h3" /><path d="M1 9h3" /><path d="M1 14h3" /></>,
+            ShieldCheck: <g><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></g>,
+            ShieldLock: <g><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M12 8v4" /><path d="M12 16h.01" /></g>,
+            Cpu: <g><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M9 1v3" /><path d="M15 1v3" /><path d="M9 20v3" /><path d="M15 20v3" /><path d="M20 9h3" /><path d="M20 14h3" /><path d="M1 9h3" /><path d="M1 14h3" /></g>,
             Activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
-            Terminal: <><polyline points="4 17 10 11 4 5" /><line x1="12" x2="20" y1="19" y2="19" /></>,
-            FileJson: <><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M10 12a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1" /><path d="M14 18a1 1 0 0 0-1-1v-1a1 1 0 0 0 1-1" /></>,
-            Lock: <><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
-            UserCog: <><circle cx="18" cy="15" r="3" /><circle cx="9" cy="7" r="4" /><path d="M10 15H6a4 4 0 0 0-4 4v2" /><path d="m21.7 16.4.9-.9" /><path d="m15.3 17.3.9-.9" /><path d="m21.7 13.6-.9-.9" /><path d="m15.3 12.7-.9-.9" /><path d="m19.7 21.7-.9-.9" /><path d="m17.3 15.3-.9-.9" /><path d="m19.7 8.3-.9-.9" /><path d="m17.3 11.7-.9-.9" /></>,
-            Server: <><rect width="20" height="8" x="2" y="2" rx="2" ry="2" /><rect width="20" height="8" x="2" y="14" rx="2" ry="2" /><line x1="6" x2="6.01" y1="6" y2="6" /><line x1="6" x2="6.01" y1="18" y2="18" /></>,
-            Hash: <><line x1="4" x2="20" y1="9" y2="9" /><line x1="4" x2="20" y1="15" y2="15" /><line x1="10" x2="8" y1="3" y2="21" /><line x1="16" x2="14" y1="3" y2="21" /></>,
+            Terminal: <g><polyline points="4 17 10 11 4 5" /><line x1="12" x2="20" y1="19" y2="19" /></g>,
+            FileJson: <g><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M10 12a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1" /><path d="M14 18a1 1 0 0 0-1-1v-1a1 1 0 0 0 1-1" /></g>,
+            Lock: <g><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></g>,
+            UserCog: <g><circle cx="18" cy="15" r="3" /><circle cx="9" cy="7" r="4" /><path d="M10 15H6a4 4 0 0 0-4 4v2" /><path d="m21.7 16.4.9-.9" /><path d="m15.3 17.3.9-.9" /><path d="m21.7 13.6-.9-.9" /><path d="m15.3 12.7-.9-.9" /><path d="m19.7 21.7-.9-.9" /><path d="m17.3 15.3-.9-.9" /><path d="m19.7 8.3-.9-.9" /><path d="m17.3 11.7-.9-.9" /></g>,
+            Server: <g><rect width="20" height="8" x="2" y="2" rx="2" ry="2" /><rect width="20" height="8" x="2" y="14" rx="2" ry="2" /><line x1="6" x2="6.01" y1="6" y2="6" /><line x1="6" x2="6.01" y1="18" y2="18" /></g>,
+            Hash: <g><line x1="4" x2="20" y1="9" y2="9" /><line x1="4" x2="20" y1="15" y2="15" /><line x1="10" x2="8" y1="3" y2="21" /><line x1="16" x2="14" y1="3" y2="21" /></g>,
             Wifi: <path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01" />,
-            WifiOff: <><line x1="1" y1="1" x2="23" y2="23" /><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" /><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" /><path d="M10.71 5.05A16 16 0 0 1 22.58 9" /><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></>,
-            CloudUpload: <><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" /><path d="M12 12v9" /><path d="m16 16-4-4-4 4" /></>
+            WifiOff: <g><line x1="1" y1="1" x2="23" y2="23" /><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" /><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" /><path d="M10.71 5.05A16 16 0 0 1 22.58 9" /><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></g>,
+            CloudUpload: <g><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" /><path d="M12 12v9" /><path d="m16 16-4-4-4 4" /></g>
         };
 
         const QIcon = ({ name, className }) => <Icon path={Icons[name]} className={className} />;
@@ -91,7 +91,8 @@
                 WARNING: "bg-amber-500/10 text-amber-400 border-amber-500/30",
                 ERROR: "bg-red-500/10 text-red-400 border-red-500/30",
                 QUEUED: "bg-purple-500/10 text-purple-400 border-purple-500/30",
-                SYNCING: "bg-sky-500/10 text-sky-400 border-sky-500/30 animate-pulse"
+                SYNCING: "bg-sky-500/10 text-sky-400 border-sky-500/30 animate-pulse",
+                BLOCKED: "bg-rose-500/10 text-rose-400 border-rose-500/30"
             };
             return (
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${styles[status] || styles.IDLE}`}>
@@ -140,7 +141,8 @@
                             log.type === 'WARN' ? 'text-amber-500' : 
                             log.type === 'OK' ? 'text-emerald-500' : 
                             log.type === 'SYS' ? 'text-purple-400' : 
-                            log.type === 'SYNC' ? 'text-sky-400' : 'text-blue-400'
+                            log.type === 'SYNC' ? 'text-sky-400' : 
+                            log.type === 'ZERO' ? 'text-orange-400' : 'text-blue-400'
                         }`}>{log.type}</span>
                         <span className="text-slate-300">{log.text}</span>
                     </div>
@@ -165,6 +167,7 @@
             const [isOnline, setIsOnline] = useState(true);
             const [pendingQueue, setPendingQueue] = useState([]); 
             const [isSyncing, setIsSyncing] = useState(false);
+            const [isZeroTrust, setIsZeroTrust] = useState(false);
 
             const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
@@ -173,13 +176,20 @@
                 setTerminalLogs(prev => [...prev, { time, type, text }]);
             };
 
+            const toggleZeroTrust = () => {
+                const newState = !isZeroTrust;
+                setIsZeroTrust(newState);
+                addTermLog("SYS", newState 
+                    ? "SECURITY LEVEL ELEVATED: ZERO TRUST MODE ACTIVE (WHITELIST ONLY)." 
+                    : "SECURITY LEVEL NORMAL: STANDARD FILTERING MODE.");
+            };
+
             const toggleNetwork = async () => {
                 const nextState = !isOnline;
                 setIsOnline(nextState);
                 
                 if (nextState) {
                     addTermLog("SYS", "NETWORK RESTORED (5G SA). INITIALIZING HANDSHAKE...");
-                    
                     if (pendingQueue.length > 0) {
                         setIsSyncing(true);
                         await delay(800);
@@ -229,26 +239,44 @@
 }`);
                 addTermLog("OK", `Batch Modification Signed by Cloud Admin.`);
                 addTermLog("INFO", "Executing Delayed Task...");
-                
                 await delay(800);
                 setStep(2); 
-                setHighlightRuleLine(7); // Highlight rulepack line
+                setHighlightRuleLine(13); 
                 addTermLog("OK", "Rulepack Re-evaluation: PASSED");
                 await delay(600);
                 setStep(4);
                 addTermLog("EXEC", "Executing safe query...");
                 addTermLog("OK", "Returned 100 records.");
                 setExecutionHash("0x9b2c...88a (Synced)");
-                
                 await delay(3000);
                 reset();
             };
 
-            // RENAME: Changed from "policy_id" to "rulepack_id" for safety
-            const rulePackCode = `{
+            // Dynamic Rulepack Display
+            const rulePackCode = isZeroTrust ? `{
+  "target_platform": "Dragonwing_v1",
+  "rulepack_id": "Q_EDGE_SEC_ZT_2026",
+  "mode": "ZERO_TRUST (WHITELIST)",
+  "default_effect": "DENY_ALL",
+  "rules": [
+    { 
+      "action": "NPU_INFERENCE", 
+      "auth": "STRICT_TOKEN_CHECK",
+      "model_whitelist": ["mobilenet_v4"],
+      "effect": "ALLOW" 
+    },
+    { 
+      "action": "SQL_QUERY", 
+      "schema_validation": "STRICT",
+      "limit": "REQUIRED", 
+      "effect": "ALLOW" 
+    }
+  ]
+}` : `{
   "target_platform": "Dragonwing_v1",
   "rulepack_id": "Q_EDGE_SEC_2026",
-  "rulepack_ver": "v1.2.4 (Signed)",
+  "mode": "STANDARD",
+  "default_effect": "ALLOW",
   "rules": [
     { 
       "action": "NPU_INFERENCE", 
@@ -300,13 +328,20 @@ Content-Type: application/json
                 }
                 
                 await delay(800);
+                
+                if (isZeroTrust) {
+                    addTermLog("ZERO", "ZERO TRUST: Verifying Device Identity Token...");
+                    await delay(400);
+                    addTermLog("ZERO", "ZERO TRUST: Identity Verified (TrustZone).");
+                }
+
                 addTermLog("INFO", "Validating Q-Signature via Secure Processing Unit...");
                 await delay(600);
                 setStep(2);
-                addTermLog("SYS", "Loading Rulepack: Q_EDGE_SEC_2026 (Local Cache)...");
+                addTermLog("SYS", `Loading Rulepack: ${isZeroTrust ? 'Q_EDGE_SEC_ZT' : 'Q_EDGE_SEC'} (Local Cache)...`);
                 await delay(500);
-                setHighlightRuleLine(7); 
-                addTermLog("OK", "MATCH: Trusted Model from Qualcomm® AI Hub");
+                setHighlightRuleLine(isZeroTrust ? 7 : 7); 
+                addTermLog("OK", isZeroTrust ? "MATCH: Whitelisted Model Hash." : "MATCH: Trusted Model from Qualcomm® AI Hub");
                 await delay(1000);
                 setStep(4); 
                 addTermLog("EXEC", "Offloading task to Hexagon™ NPU (Offline Mode Supported).");
@@ -333,11 +368,19 @@ Content-Type: application/json
                 addTermLog("INFO", "Receiving payload on Control Plane");
                 await delay(800);
                 setStep(2);
-                addTermLog("SYS", "Parsing syntax complexity...");
-                await delay(600);
-                setHighlightRuleLine(12);
-                addTermLog("WARN", "VIOLATION: Unbounded query on Edge Node");
+
+                if (isZeroTrust) {
+                     addTermLog("ZERO", "ZERO TRUST: Strict Schema Validation...");
+                     await delay(500);
+                     addTermLog("ZERO", "VIOLATION: Schema requires 'LIMIT' clause.");
+                } else {
+                    addTermLog("SYS", "Parsing syntax complexity...");
+                    await delay(600);
+                    addTermLog("WARN", "VIOLATION: Unbounded query on Edge Node");
+                }
                 
+                setHighlightRuleLine(isZeroTrust ? 13 : 13);
+
                 if (!isOnline) {
                     addTermLog("WARN", "OFFLINE DETECTED: Unable to reach Human Admin.");
                     await delay(500);
@@ -347,7 +390,6 @@ Content-Type: application/json
                     setPendingQueue(prev => [...prev, { type: 'HUMAN_LOOP', id: queueId }]);
                     setExecutionHash("QUEUED_" + queueId);
                     setStep(4);
-                    
                     await delay(2000);
                     reset();
                     return; 
@@ -378,10 +420,17 @@ Content-Type: application/json
 }`);
                 addTermLog("WARN", "Privileged Hardware Access Detected");
                 await delay(800);
-                setStep(2);
-                addTermLog("SYS", "Scanning against TrustZone® Rulepack (Local)...");
-                await delay(600);
-                setHighlightRuleLine(17); 
+                
+                if (isZeroTrust) {
+                    addTermLog("ZERO", "ZERO TRUST: Explicit Deny for Root Access.");
+                    await delay(200);
+                } else {
+                    setStep(2);
+                    addTermLog("SYS", "Scanning against TrustZone® Rulepack (Local)...");
+                    await delay(600);
+                }
+                
+                setHighlightRuleLine(isZeroTrust ? 5 : 18);
                 addTermLog("ERR", "CRITICAL BLOCK: Rule #3 (DENY)");
                 addTermLog("ERR", "Attempt to bypass Secure Boot Chain.");
                 await delay(1000);
@@ -424,7 +473,18 @@ Content-Type: application/json
                                 <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
                                     QITC 2026 <span className="text-slate-500 font-light">|</span> Governance Demo
                                 </h1>
-                                <div className="flex items-center gap-3 text-xs text-blue-300/80 font-mono mt-1">
+                                <div className="flex items-center gap-3 text-xs text-blue-300/80 font-mono mt-1 flex-wrap">
+                                    {/* Zero Trust Toggle */}
+                                    <button onClick={toggleZeroTrust} disabled={isSyncing || activeScenario}
+                                        className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all cursor-pointer ${
+                                            isZeroTrust 
+                                            ? "bg-orange-900/40 border-orange-500/50 text-orange-200 hover:bg-orange-900/60" 
+                                            : "bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-700"
+                                        }`} title="Toggle Whitelist Mode">
+                                        <QIcon name={isZeroTrust ? "ShieldLock" : "Shield"} className="w-3 h-3" />
+                                        {isZeroTrust ? "ZERO TRUST: STRICT" : "STANDARD: FILTERING"}
+                                    </button>
+
                                     {/* Network Toggle */}
                                     <button onClick={toggleNetwork} disabled={isSyncing}
                                         className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all cursor-pointer ${
@@ -433,8 +493,7 @@ Content-Type: application/json
                                             : "bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-700"
                                         } ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`} title="Click to Simulate Network Loss">
                                         <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-red-500"}`}></span>
-                                        {isOnline ? "5G SA: CONNECTED" : "OFFLINE: SECURE MODE"}
-                                        {isOnline ? <QIcon name="Wifi" className="w-3 h-3 ml-1" /> : <QIcon name="WifiOff" className="w-3 h-3 ml-1" />}
+                                        {isOnline ? "5G SA: ON" : "OFFLINE: LOCAL"}
                                     </button>
 
                                     {/* Queue Indicator */}
@@ -537,7 +596,7 @@ Content-Type: application/json
                         }`}>
                             <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
                                 <h3 className="text-sm font-bold text-indigo-100 flex items-center gap-2">
-                                    <QIcon name="ShieldCheck" className="w-4 h-4 text-indigo-400" />
+                                    <QIcon name={isZeroTrust ? "ShieldLock" : "ShieldCheck"} className="w-4 h-4 text-indigo-400" />
                                     Edge Governance Rulepack
                                 </h3>
                                 <StatusBadge status={step === 2 ? "PROCESSING" : step === 3 ? "WARNING" : "IDLE"} />
