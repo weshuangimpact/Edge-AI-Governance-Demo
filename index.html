@@ -3,27 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QITC 2026 Edge Governance Demo</title>
+    <title>QITC 2026: Dragonwing Edge Governance</title>
     
-    <!-- 0. Error Handler -->
-    <script>
-        window.onerror = function(message, source, lineno, colno, error) {
-            const root = document.getElementById('root');
-            if (root && root.innerHTML === '') {
-                document.body.innerHTML = `
-                    <div style="color: #ef4444; padding: 20px; font-family: monospace; background: #1e293b; height: 100vh;">
-                        <h2 style="margin-bottom: 10px;">System Critical Error</h2>
-                        <p>The application failed to render. See details below:</p>
-                        <div style="background: #000; padding: 15px; border-radius: 5px; border: 1px solid #451a1a;">
-                            ${message}<br>
-                            <small>${source}:${lineno}</small>
-                        </div>
-                    </div>
-                `;
-            }
-        };
-    </script>
-
     <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -34,60 +15,79 @@
     <!-- 3. Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 4. Lucide React Icons (Pinned Version) -->
-    <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js"></script>
-
     <style>
+        /* Corporate Dark Theme overrides */
+        body {
+            background-color: #0f172a; /* Slate 900 - Professional Navy/Dark */
+            background-image: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                              radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #000; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-        @keyframes scan {
-          0% { top: -20%; opacity: 0; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
+        
+        @keyframes scan-line {
+          0% { top: 0%; opacity: 0; }
           10% { opacity: 1; }
           90% { opacity: 1; }
-          100% { top: 120%; opacity: 0; }
+          100% { top: 100%; opacity: 0; }
         }
-        .qualcomm-font {
-            font-family: 'Segoe UI', system-ui, sans-serif; /* Mimic corporate clean look */
+        
+        .font-qualcomm {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-200">
+<body class="text-slate-200 font-qualcomm antialiased">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
-        
-        // Safety Fallback
-        const Lucide = window.lucideReact || {};
-        const createFallbackIcon = (name) => (props) => (
-            <span {...props} style={{...props.style, display:'inline-flex', alignItems:'center', justifyContent:'center', border:'1px dashed currentColor', fontSize:'10px', width:'24px', height:'24px', borderRadius:'4px'}} title={name}>?</span>
+
+        // --- 1. Internal SVG Icons (No CDN dependencies = 100% Stability) ---
+        const Icon = ({ path, color = "currentColor", size = 20, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
         );
-        const getIcon = (name) => Lucide[name] || createFallbackIcon(name);
 
-        const Shield = getIcon('Shield');
-        const ShieldCheck = getIcon('ShieldCheck');
-        const Activity = getIcon('Activity');
-        const Terminal = getIcon('Terminal');
-        const Lock = getIcon('Lock');
-        const UserCog = getIcon('UserCog');
-        const Hash = getIcon('Hash');
-        const Server = getIcon('Server');
-        const FileJson = getIcon('FileJson');
-        const Cpu = getIcon('Cpu'); // New icon for NPU
+        const Icons = {
+            Shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+            ShieldCheck: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></>,
+            Cpu: <><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M9 1v3" /><path d="M15 1v3" /><path d="M9 20v3" /><path d="M15 20v3" /><path d="M20 9h3" /><path d="M20 14h3" /><path d="M1 9h3" /><path d="M1 14h3" /></>,
+            Activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+            Terminal: <><polyline points="4 17 10 11 4 5" /><line x1="12" x2="20" y1="19" y2="19" /></>,
+            FileJson: <><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M10 12a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1" /><path d="M14 18a1 1 0 0 0-1-1v-1a1 1 0 0 0 1-1" /></>,
+            Lock: <><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
+            UserCog: <><circle cx="18" cy="15" r="3" /><circle cx="9" cy="7" r="4" /><path d="M10 15H6a4 4 0 0 0-4 4v2" /><path d="m21.7 16.4.9-.9" /><path d="m15.3 17.3.9-.9" /><path d="m21.7 13.6-.9-.9" /><path d="m15.3 12.7-.9-.9" /><path d="m19.7 21.7-.9-.9" /><path d="m17.3 15.3-.9-.9" /><path d="m19.7 8.3-.9-.9" /><path d="m17.3 11.7-.9-.9" /></>,
+            Server: <><rect width="20" height="8" x="2" y="2" rx="2" ry="2" /><rect width="20" height="8" x="2" y="14" rx="2" ry="2" /><line x1="6" x2="6.01" y1="6" y2="6" /><line x1="6" x2="6.01" y1="18" y2="18" /></>,
+            Hash: <><line x1="4" x2="20" y1="9" y2="9" /><line x1="4" x2="20" y1="15" y2="15" /><line x1="10" x2="8" y1="3" y2="21" /><line x1="16" x2="14" y1="3" y2="21" /></>
+        };
 
-        // --- Utility Components ---
+        const QIcon = ({ name, className }) => <Icon path={Icons[name]} className={className} />;
+
+
+        // --- 2. Utility Components ---
 
         const StatusBadge = ({ status }) => {
-            const colors = {
-                IDLE: "bg-slate-800 text-slate-400 border-slate-700",
-                PROCESSING: "bg-blue-900/30 text-blue-400 border-blue-500/50 animate-pulse",
-                SUCCESS: "bg-emerald-900/30 text-emerald-400 border-emerald-500/50",
-                WARNING: "bg-amber-900/30 text-amber-400 border-amber-500/50",
-                ERROR: "bg-red-900/30 text-red-400 border-red-500/50",
+            const styles = {
+                IDLE: "bg-slate-800/50 text-slate-400 border-slate-700",
+                PROCESSING: "bg-blue-500/10 text-blue-400 border-blue-500/30 animate-pulse",
+                SUCCESS: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+                WARNING: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+                ERROR: "bg-red-500/10 text-red-400 border-red-500/30",
             };
             return (
-                <span className={`px-2 py-0.5 rounded text-[10px] font-mono border ${colors[status] || colors.IDLE}`}>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${styles[status] || styles.IDLE}`}>
                 {status}
                 </span>
             );
@@ -95,16 +95,16 @@
 
         const TypewriterCode = ({ code, highlightLine, highlightColor }) => {
             return (
-                <div className="font-mono text-xs leading-5 p-3 bg-slate-950 rounded border border-slate-800 overflow-hidden relative h-full">
-                <div className="absolute top-0 left-0 w-8 h-full bg-slate-900/50 border-r border-slate-800 text-slate-600 flex flex-col items-end pr-2 pt-3 select-none">
+                <div className="font-mono text-xs leading-5 p-3 bg-[#0a0f1c] rounded-lg border border-slate-800 overflow-hidden relative h-full shadow-inner">
+                <div className="absolute top-0 left-0 w-8 h-full bg-slate-900/30 border-r border-slate-800/50 text-slate-600 flex flex-col items-end pr-2 pt-3 select-none">
                     {code.split('\n').map((_, i) => <div key={i}>{i + 1}</div>)}
                 </div>
                 <div className="pl-10 pt-0">
                     {code.split('\n').map((line, i) => (
-                    <div key={i} className={`px-1 transition-colors duration-300 ${
+                    <div key={i} className={`px-1 transition-colors duration-300 rounded ${
                         highlightLine === i + 1 
-                        ? (highlightColor === 'red' ? 'bg-red-900/40 text-red-200' : 'bg-emerald-900/40 text-emerald-200') 
-                        : 'text-slate-300'
+                        ? (highlightColor === 'red' ? 'bg-red-900/30 text-red-200 border-l-2 border-red-500' : 'bg-emerald-900/30 text-emerald-200 border-l-2 border-emerald-500') 
+                        : 'text-slate-400'
                     }`}>
                         {line || ' '}
                     </div>
@@ -119,25 +119,30 @@
             useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [logs]);
 
             return (
-                <div className="h-full bg-black font-mono text-xs p-3 overflow-y-auto text-slate-300 custom-scrollbar">
-                <div className="text-slate-500 mb-2">admin@dragonwing-platform:~# tail -f /var/log/q_governance.log</div>
+                <div className="h-full bg-[#0a0f1c] font-mono text-xs p-3 overflow-y-auto text-slate-300 custom-scrollbar rounded-b-lg">
+                <div className="text-slate-500 mb-3 pb-2 border-b border-slate-800 flex justify-between">
+                    <span>admin@dragonwing-platform:~# tail -f /var/log/q_governance.log</span>
+                    <span className="text-[10px] text-slate-600">Baud: 115200</span>
+                </div>
                 {logs.map((log, i) => (
-                    <div key={i} className="mb-1 break-words font-mono">
-                    <span className="text-slate-600 mr-2">[{log.time}]</span>
-                    <span className={`font-bold ${
-                        log.type === 'ERR' ? 'text-red-500' : 
-                        log.type === 'WARN' ? 'text-amber-500' : 
-                        log.type === 'OK' ? 'text-emerald-500' : 'text-blue-400'
-                    }`}>{log.type}</span>
-                    <span className="ml-2 text-slate-300">{log.text}</span>
+                    <div key={i} className="mb-1 break-words font-mono flex">
+                    <span className="text-slate-600 mr-3 min-w-[60px] text-right">[{log.time}]</span>
+                    <div className="flex-1">
+                        <span className={`font-bold mr-2 ${
+                            log.type === 'ERR' ? 'text-red-500' : 
+                            log.type === 'WARN' ? 'text-amber-500' : 
+                            log.type === 'OK' ? 'text-emerald-500' : 'text-blue-400'
+                        }`}>{log.type}</span>
+                        <span className="text-slate-300">{log.text}</span>
+                    </div>
                     </div>
                 ))}
-                <div ref={endRef} className="animate-pulse text-emerald-500">_</div>
+                <div ref={endRef} className="animate-pulse text-emerald-500 mt-2">_</div>
                 </div>
             );
         };
 
-        // --- Main Application ---
+        // --- 3. Main Application ---
 
         function App() {
             const [activeScenario, setActiveScenario] = useState(null);
@@ -187,13 +192,11 @@
                 setExecutionHash("Waiting...");
             };
 
-            // Scenario 1: NPU Inference (Optimized for 2026 AI focus)
             const runScenario1 = async () => {
                 if (activeScenario) return;
                 reset();
                 setActiveScenario(1);
                 setTerminalLogs([]);
-                
                 setStep(1);
                 setCurrentInputCode(`POST /api/ai/inference
 Host: arduino-uno-q-01
@@ -209,32 +212,27 @@ Content-Type: application/json
                 await delay(800);
                 addTermLog("INFO", "Validating Q-Signature via Secure Processing Unit...");
                 await delay(600);
-
                 setStep(2);
                 addTermLog("SYS", "Loading Policy: Q_EDGE_SEC_2026...");
                 await delay(500);
                 setHighlightRuleLine(6); 
                 addTermLog("OK", "MATCH: Trusted Model from Qualcomm® AI Hub");
                 await delay(1000);
-
                 setStep(4); 
                 addTermLog("EXEC", "Offloading task to Hexagon™ NPU...");
                 addTermLog("EXEC", "Inference time: 4ms (High Performance Mode)");
                 await delay(800);
                 addTermLog("OK", "Result returned. Power delta: -15%");
                 setExecutionHash("0xQ8a...77b (Immutable)");
-                
                 await delay(3000);
                 reset();
             };
 
-            // Scenario 2: Human Loop (Standard)
             const runScenario2 = async () => {
                 if (activeScenario) return;
                 reset();
                 setActiveScenario(2);
                 setTerminalLogs([]);
-
                 setStep(1);
                 setCurrentInputCode(`POST /api/db/query
 {
@@ -244,7 +242,6 @@ Content-Type: application/json
 }`);
                 addTermLog("INFO", "Receiving payload on Control Plane");
                 await delay(800);
-
                 setStep(2);
                 addTermLog("SYS", "Parsing syntax complexity...");
                 await delay(600);
@@ -252,7 +249,6 @@ Content-Type: application/json
                 addTermLog("WARN", "VIOLATION: Unbounded query on Edge Node");
                 addTermLog("WARN", "Invoking QITC Operator Intervention...");
                 await delay(1000);
-
                 setStep(3);
                 setReviewDiff({
                     original: "SELECT * FROM sensor_logs",
@@ -260,11 +256,7 @@ Content-Type: application/json
                 });
                 setShowReviewModal(true);
                 addTermLog("WAIT", "Waiting for Dragonwing Admin...");
-                
-                await new Promise(resolve => {
-                    setTimeout(resolve, 2500);
-                });
-                
+                await new Promise(resolve => setTimeout(resolve, 2500));
                 setShowReviewModal(false);
                 setCurrentInputCode(`POST /api/db/query
 {
@@ -274,29 +266,24 @@ Content-Type: application/json
 }`);
                 addTermLog("OK", "Modification Signed by Admin Key.");
                 addTermLog("INFO", "Re-submitting to execution queue...");
-                
                 await delay(800);
                 setStep(2); 
-                setHighlightRuleLine(6); // Default back to top or just re-eval
+                setHighlightRuleLine(6);
                 addTermLog("OK", "Policy Re-evaluation: PASSED");
                 await delay(600);
-
                 setStep(4);
                 addTermLog("EXEC", "Executing safe query...");
                 addTermLog("OK", "Returned 100 records.");
                 setExecutionHash("0x9b2c...88a");
-                
                 await delay(3000);
                 reset();
             };
 
-            // Scenario 3: Hardware Security Injection (Dragonwing/SPU focus)
             const runScenario3 = async () => {
                 if (activeScenario) return;
                 reset();
                 setActiveScenario(3);
                 setTerminalLogs([]);
-
                 setStep(1);
                 setCurrentInputCode(`POST /api/sys/config
 {
@@ -306,7 +293,6 @@ Content-Type: application/json
 }`);
                 addTermLog("WARN", "Privileged Hardware Access Detected");
                 await delay(800);
-
                 setStep(2);
                 addTermLog("SYS", "Scanning against TrustZone® policy...");
                 await delay(600);
@@ -314,91 +300,90 @@ Content-Type: application/json
                 addTermLog("ERR", "CRITICAL BLOCK: Rule #3 (DENY)");
                 addTermLog("ERR", "Attempt to bypass Secure Boot Chain.");
                 await delay(1000);
-
                 setStep(4);
                 addTermLog("SEC", "Hardware Fuse Tripped (Simulation).");
                 addTermLog("SEC", "Isolating Arduino UNO Q Node.");
                 setExecutionHash("SEC_VIOLATION_Q992");
                 addTermLog("AUDIT", "Report sent to Qualcomm Cloud.");
-                
                 await delay(3000);
                 reset();
             };
 
             return (
-                <div className="min-h-screen p-4 flex flex-col gap-4 overflow-hidden selection:bg-blue-500/30 qualcomm-font">
+                <div className="min-h-screen p-6 flex flex-col gap-6 selection:bg-blue-500/30">
                     
-                    {/* Header */}
-                    <div className="flex flex-col md:flex-row justify-between items-center bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg z-20 sticky top-0">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-black border border-slate-700 rounded-lg flex items-center justify-center shadow-lg">
-                                {/* Stylized Q representation */}
-                                <Cpu className="text-white w-6 h-6" />
+                    {/* Top Branding Bar */}
+                    <div className="glass-panel p-5 rounded-xl shadow-2xl z-20 sticky top-0 flex flex-col md:flex-row justify-between items-center border-t border-white/10">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-blue-700/20 border border-blue-500/30 rounded-lg flex items-center justify-center relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-blue-600/20 blur-xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                                <QIcon name="Cpu" className="text-blue-400 w-7 h-7 relative z-10" />
                             </div>
                             <div>
-                                <h1 className="text-lg font-bold text-slate-100 tracking-wide">
-                                    Governance Engine <span className="text-xs font-normal text-slate-400 ml-2">Powered by Qualcomm® Dragonwing™</span>
+                                <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                                    QITC 2026 <span className="text-slate-500 font-light">|</span> Governance Demo
                                 </h1>
-                                <div className="flex items-center gap-2 text-xs text-slate-500 font-mono mt-1">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    ONLINE | PLATFORM: ARDUINO_UNO_Q | 5G
+                                <div className="flex items-center gap-3 text-xs text-blue-300/80 font-mono mt-1">
+                                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-900/30 border border-blue-800/50">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                        ONLINE
+                                    </span>
+                                    <span>ARDUINO_UNO_Q</span>
+                                    <span>•</span>
+                                    <span>DRAGONWING PLATFORM</span>
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex gap-3 mt-4 md:mt-0">
-                            <button onClick={runScenario1} disabled={activeScenario}
-                                className="px-4 py-2 bg-slate-800 hover:bg-emerald-900/20 border border-slate-700 hover:border-emerald-500/50 rounded-lg text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2 group text-white">
-                                <div className="w-2 h-2 bg-emerald-500 rounded-full group-hover:shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div> 
-                                AI Hub Inference
-                            </button>
-                            <button onClick={runScenario2} disabled={activeScenario}
-                                className="px-4 py-2 bg-slate-800 hover:bg-amber-900/20 border border-slate-700 hover:border-amber-500/50 rounded-lg text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2 group text-white">
-                                <div className="w-2 h-2 bg-amber-500 rounded-full group-hover:shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div> 
-                                Human Loop
-                            </button>
-                            <button onClick={runScenario3} disabled={activeScenario}
-                                className="px-4 py-2 bg-slate-800 hover:bg-red-900/20 border border-slate-700 hover:border-red-500/50 rounded-lg text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2 group text-white">
-                                <div className="w-2 h-2 bg-red-500 rounded-full group-hover:shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div> 
-                                SPU Security
-                            </button>
+                            {[
+                                { id: 1, label: "AI Hub Inference", color: "bg-blue-600", hover: "hover:bg-blue-500", fn: runScenario1 },
+                                { id: 2, label: "Human Loop", color: "bg-amber-600", hover: "hover:bg-amber-500", fn: runScenario2 },
+                                { id: 3, label: "SPU Security", color: "bg-red-600", hover: "hover:bg-red-500", fn: runScenario3 },
+                            ].map(btn => (
+                                <button key={btn.id} onClick={btn.fn} disabled={activeScenario}
+                                    className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100 shadow-lg ${activeScenario === btn.id ? 'ring-2 ring-white/50' : ''} ${btn.color} ${btn.hover} text-white`}>
+                                    {btn.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Stage */}
-                    <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 relative min-h-[600px]">
+                    {/* Main Workspace */}
+                    <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 relative min-h-[600px]">
                         
-                        {/* Modal */}
+                        {/* Overlay Modal */}
                         {showReviewModal && (
-                            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-                                <div className="bg-slate-900 border border-amber-500/50 rounded-xl shadow-2xl w-[90%] max-w-lg overflow-hidden transform scale-100 transition-all">
-                                    <div className="bg-amber-950/30 p-4 border-b border-amber-900/50 flex justify-between items-center">
-                                        <div className="flex items-center gap-2 text-amber-500 font-bold">
-                                            <UserCog className="w-5 h-5" /> Intervention Required
+                            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 rounded-xl">
+                                <div className="glass-panel w-[90%] max-w-lg rounded-xl overflow-hidden shadow-2xl border border-amber-500/30 transform scale-100 transition-all">
+                                    <div className="bg-amber-900/20 p-4 border-b border-amber-500/20 flex justify-between items-center">
+                                        <div className="flex items-center gap-2 text-amber-400 font-bold">
+                                            <QIcon name="UserCog" className="w-5 h-5" /> Intervention Required
                                         </div>
-                                        <div className="text-xs bg-amber-900/50 text-amber-200 px-2 py-1 rounded font-mono border border-amber-500/30">QITC_FLAG_02</div>
+                                        <span className="text-[10px] bg-amber-500/10 text-amber-300 px-2 py-1 rounded border border-amber-500/20 font-mono">QITC_FLAG_02</span>
                                     </div>
-                                    <div className="p-6 space-y-4">
-                                        <div>
-                                            <div className="text-xs text-slate-500 mb-1 uppercase font-bold tracking-wider">Incoming Violation:</div>
-                                            <div className="bg-red-950/20 border border-red-900/30 p-3 rounded text-red-300 font-mono text-sm relative overflow-hidden">
-                                                <span className="line-through decoration-red-500/50">{reviewDiff.original}</span>
+                                    <div className="p-6 space-y-6">
+                                        <div className="space-y-2">
+                                            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Incoming Violation</div>
+                                            <div className="bg-red-950/30 border border-red-500/20 p-3 rounded-lg text-red-300 font-mono text-sm">
+                                                <span className="line-through decoration-red-500/50 decoration-2">{reviewDiff.original}</span>
                                             </div>
                                         </div>
-                                        <div className="flex justify-center">
-                                            <div className="bg-slate-800 p-1.5 rounded-full border border-slate-700"><Server className="w-4 h-4 text-slate-500" /></div>
+                                        <div className="flex justify-center -my-2 opacity-50">
+                                            <QIcon name="Server" className="w-5 h-5 text-slate-500" />
                                         </div>
-                                        <div>
-                                            <div className="text-xs text-emerald-500 mb-1 uppercase font-bold tracking-wider">Suggested Fix (Safe):</div>
-                                            <div className="bg-emerald-950/20 border border-emerald-900/30 p-3 rounded text-emerald-300 font-mono text-sm shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                                        <div className="space-y-2">
+                                            <div className="text-xs text-emerald-400 font-bold uppercase tracking-wider">Suggested Fix (Safe)</div>
+                                            <div className="bg-emerald-950/30 border border-emerald-500/20 p-3 rounded-lg text-emerald-300 font-mono text-sm shadow-[0_0_15px_rgba(16,185,129,0.1)]">
                                                 {reviewDiff.fixed}
                                             </div>
                                         </div>
-                                        <div className="pt-4 flex justify-end gap-2 border-t border-slate-800 mt-4">
-                                            <div className="text-xs text-slate-500 flex items-center mr-auto">
-                                                <Activity className="w-3 h-3 mr-1 animate-pulse" /> Auto-approving...
+                                        <div className="pt-4 flex justify-between items-center border-t border-white/5">
+                                            <div className="text-xs text-slate-500 flex items-center">
+                                                <QIcon name="Activity" className="w-3 h-3 mr-1.5 animate-pulse text-blue-400" /> 
+                                                Auto-approving via Dragonwing...
                                             </div>
-                                            <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded shadow-lg shadow-emerald-900/20 transition-all">
+                                            <button className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded shadow-lg transition-colors">
                                                 Approve Fix
                                             </button>
                                         </div>
@@ -407,78 +392,72 @@ Content-Type: application/json
                             </div>
                         )}
 
-                        {/* Col 1 */}
-                        <div className={`lg:col-span-4 rounded-xl border flex flex-col transition-all duration-500 relative z-10 ${
-                            step === 1 ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.2)] bg-slate-900 scale-[1.01]' : 'border-slate-800 bg-slate-900/50 opacity-60 grayscale-[0.5]'
+                        {/* Panel 1: Ingest */}
+                        <div className={`lg:col-span-4 rounded-xl glass-panel flex flex-col transition-all duration-500 ${
+                            step === 1 ? 'border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/30' : 'opacity-70'
                         }`}>
-                            <div className="p-3 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 backdrop-blur-sm rounded-t-xl">
-                                <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                                    <FileJson className="w-4 h-4 text-blue-400" />
+                            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+                                <h3 className="text-sm font-bold text-blue-100 flex items-center gap-2">
+                                    <QIcon name="FileJson" className="w-4 h-4 text-blue-400" />
                                     Payload Ingest
                                 </h3>
                                 <StatusBadge status={step === 1 ? "PROCESSING" : "IDLE"} />
                             </div>
-                            <div className="flex-1 p-4 flex flex-col h-64 lg:h-auto">
+                            <div className="flex-1 p-4 flex flex-col min-h-[240px]">
                                 {currentInputCode ? (
                                     <TypewriterCode code={currentInputCode} />
                                 ) : (
-                                    <div className="flex-1 flex flex-col items-center justify-center text-slate-600 text-sm italic border-2 border-dashed border-slate-800 rounded-lg">
-                                        <Activity className="w-8 h-8 mb-2 opacity-20" />
-                                        Awaiting Data Stream...
-                                    </div>
-                                )}
-                                {step === 1 && (
-                                    <div className="mt-4 flex items-center gap-2 text-xs text-blue-400 animate-pulse font-mono">
-                                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                        Decrypting (Snapdragon TrustZone)...
+                                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-sm italic border-2 border-dashed border-slate-700/50 rounded-lg bg-slate-800/20">
+                                        <QIcon name="Activity" className="w-8 h-8 mb-2 opacity-30" />
+                                        Awaiting 5G Stream...
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Col 2 */}
-                        <div className={`lg:col-span-4 rounded-xl border flex flex-col transition-all duration-500 relative z-10 ${
-                            step === 2 || step === 3 ? 'border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.15)] bg-slate-900 scale-[1.01]' : 'border-slate-800 bg-slate-900/50 opacity-60 grayscale-[0.5]'
+                        {/* Panel 2: Policy */}
+                        <div className={`lg:col-span-4 rounded-xl glass-panel flex flex-col transition-all duration-500 ${
+                            step === 2 || step === 3 ? 'border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.15)] ring-1 ring-indigo-500/30' : 'opacity-70'
                         }`}>
-                            <div className="p-3 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 backdrop-blur-sm rounded-t-xl">
-                                <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                                    <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                                    Policy Engine (Dragonwing)
+                            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+                                <h3 className="text-sm font-bold text-indigo-100 flex items-center gap-2">
+                                    <QIcon name="ShieldCheck" className="w-4 h-4 text-indigo-400" />
+                                    Dragonwing Policy
                                 </h3>
                                 <StatusBadge status={step === 2 ? "PROCESSING" : step === 3 ? "WARNING" : "IDLE"} />
                             </div>
-                            <div className="flex-1 p-4 overflow-hidden relative h-64 lg:h-auto">
+                            <div className="flex-1 p-4 overflow-hidden relative min-h-[240px]">
                                 <TypewriterCode 
                                     code={rulePackCode} 
                                     highlightLine={highlightRuleLine}
                                     highlightColor={activeScenario === 3 ? 'red' : 'green'}
                                 />
                                 {step === 2 && (
-                                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-indigo-500/10 to-transparent h-[20%] w-full animate-[scan_1.5s_linear_infinite]"></div>
+                                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-indigo-500/10 to-transparent h-[20%] w-full animate-[scan-line_1.5s_linear_infinite]"></div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Col 3 */}
-                        <div className={`lg:col-span-4 rounded-xl border flex flex-col transition-all duration-500 overflow-hidden relative z-10 ${
-                            step === 4 ? 'border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.15)] bg-slate-900 scale-[1.01]' : 'border-slate-800 bg-slate-900/50 opacity-60 grayscale-[0.5]'
+                        {/* Panel 3: Execution */}
+                        <div className={`lg:col-span-4 rounded-xl glass-panel flex flex-col transition-all duration-500 overflow-hidden ${
+                            step === 4 ? 'border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30' : 'opacity-70'
                         }`}>
-                            <div className="p-3 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 backdrop-blur-sm rounded-t-xl">
-                                <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                                    <Terminal className="w-4 h-4 text-emerald-400" />
-                                    Execution Log (Hexagon)
+                            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+                                <h3 className="text-sm font-bold text-emerald-100 flex items-center gap-2">
+                                    <QIcon name="Terminal" className="w-4 h-4 text-emerald-400" />
+                                    Hexagon™ NPU Log
                                 </h3>
                                 <StatusBadge status={step === 4 ? (activeScenario === 3 ? "ERROR" : "SUCCESS") : "IDLE"} />
                             </div>
-                            <div className="flex-1 bg-black h-64 lg:h-auto border-x border-slate-800">
+                            <div className="flex-1 min-h-[240px] bg-[#0a0f1c]">
                                 <TerminalOutput logs={terminalLogs} />
                             </div>
-                            <div className="p-2 bg-slate-950 border-t border-slate-800 flex items-center gap-2 text-[10px] text-slate-500 font-mono">
-                                <Hash className="w-3 h-3 text-slate-600" />
+                            <div className="px-3 py-2 bg-[#05080f] border-t border-slate-800 flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                                <QIcon name="Hash" className="w-3 h-3 text-slate-600" />
                                 <span className={`truncate transition-colors duration-500 ${step === 4 ? 'text-emerald-500' : ''}`}>
                                     {executionHash}
                                 </span>
-                                {step === 4 && <Lock className="w-3 h-3 text-emerald-500 ml-auto" />}
+                                {step === 4 && <QIcon name="Lock" className="w-3 h-3 text-emerald-500 ml-auto" />}
                             </div>
                         </div>
 
