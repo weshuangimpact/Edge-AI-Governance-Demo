@@ -153,6 +153,65 @@
             );
         };
 
+        const TelemetryPanel = ({ active, isZeroTrust }) => (
+            <div className={`rounded-xl glass-panel p-4 transition-all duration-500 border border-slate-700/50 flex flex-col gap-3 ${active ? 'opacity-100' : 'opacity-60 grayscale'}`}>
+                <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <QIcon name="Cpu" className="w-3 h-3" />
+                        Hardware Telemetry
+                    </h3>
+                    <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 border border-slate-700">
+                        DRAGONWING DIGITAL TWIN
+                    </span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    {/* Metric 1: NPU Latency */}
+                    <div className="bg-slate-900/50 p-2 rounded border border-white/5">
+                        <div className="text-[10px] text-slate-500 mb-1">NPU INFERENCE (INT8)</div>
+                        <div className="flex items-end gap-1">
+                            <span className={`text-lg font-mono font-bold ${active ? 'text-emerald-400' : 'text-slate-600'}`}>
+                                {active ? "3.8" : "--"}
+                            </span>
+                            <span className="text-[10px] text-slate-500 mb-1">ms</span>
+                        </div>
+                        <div className="w-full h-1 bg-slate-800 rounded-full mt-1 overflow-hidden">
+                            <div className={`h-full bg-emerald-500 transition-all duration-1000 ${active ? 'w-[30%]' : 'w-0'}`}></div>
+                        </div>
+                    </div>
+
+                    {/* Metric 2: Governance Overhead */}
+                    <div className="bg-slate-900/50 p-2 rounded border border-white/5">
+                        <div className="text-[10px] text-slate-500 mb-1">GOVERNANCE OVERHEAD</div>
+                        <div className="flex items-end gap-1">
+                            <span className={`text-lg font-mono font-bold ${active ? 'text-blue-400' : 'text-slate-600'}`}>
+                                {active ? (isZeroTrust ? "0.08" : "0.04") : "--"}
+                            </span>
+                            <span className="text-[10px] text-slate-500 mb-1">ms</span>
+                        </div>
+                        <div className="w-full h-1 bg-slate-800 rounded-full mt-1 overflow-hidden">
+                            <div className={`h-full bg-blue-500 transition-all duration-1000 ${active ? 'w-[5%]' : 'w-0'}`}></div>
+                        </div>
+                    </div>
+
+                    {/* Metric 3: Power Efficiency */}
+                    <div className="bg-slate-900/50 p-2 rounded border border-white/5 col-span-2 flex justify-between items-center">
+                        <div>
+                            <div className="text-[10px] text-slate-500">POWER EFFICIENCY (vs CPU)</div>
+                            <div className={`text-sm font-bold ${active ? 'text-emerald-400' : 'text-slate-600'}`}>
+                                {active ? "+15% SAVINGS" : "STANDBY"}
+                            </div>
+                        </div>
+                        <QIcon name="Activity" className={`w-5 h-5 ${active ? 'text-emerald-500 animate-pulse' : 'text-slate-700'}`} />
+                    </div>
+                </div>
+
+                <div className="text-[9px] text-slate-600 text-center mt-1 font-mono">
+                    * Projected Data via Qualcomm® AI Stack (Simulated)
+                </div>
+            </div>
+        );
+
         // --- 3. Main Application ---
 
         function App() {
@@ -370,9 +429,9 @@ Content-Type: application/json
                 setStep(2);
 
                 if (isZeroTrust) {
-                     addTermLog("ZERO", "ZERO TRUST: Strict Schema Validation...");
-                     await delay(500);
-                     addTermLog("ZERO", "VIOLATION: Schema requires 'LIMIT' clause.");
+                      addTermLog("ZERO", "ZERO TRUST: Strict Schema Validation...");
+                      await delay(500);
+                      addTermLog("ZERO", "VIOLATION: Schema requires 'LIMIT' clause.");
                 } else {
                     addTermLog("SYS", "Parsing syntax complexity...");
                     await delay(600);
@@ -567,27 +626,35 @@ Content-Type: application/json
                             </div>
                         )}
 
-                        {/* Panel 1: Ingest */}
-                        <div className={`lg:col-span-4 rounded-xl glass-panel flex flex-col transition-all duration-500 ${
-                            step === 1 ? 'border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/30' : 'opacity-70'
-                        }`}>
-                            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-                                <h3 className="text-sm font-bold text-blue-100 flex items-center gap-2">
-                                    <QIcon name="FileJson" className="w-4 h-4 text-blue-400" />
-                                    Payload Ingest
-                                </h3>
-                                <StatusBadge status={step === 1 ? "PROCESSING" : "IDLE"} />
+                        {/* COLUMN 1: Ingest + Telemetry */}
+                        <div className="lg:col-span-4 flex flex-col gap-6">
+                            
+                            {/* Panel 1: Ingest */}
+                            <div className={`flex-1 rounded-xl glass-panel flex flex-col transition-all duration-500 ${
+                                step === 1 ? 'border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/30' : 'opacity-70'
+                            }`}>
+                                <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+                                    <h3 className="text-sm font-bold text-blue-100 flex items-center gap-2">
+                                        <QIcon name="FileJson" className="w-4 h-4 text-blue-400" />
+                                        Payload Ingest
+                                    </h3>
+                                    <StatusBadge status={step === 1 ? "PROCESSING" : "IDLE"} />
+                                </div>
+                                <div className="flex-1 p-4 flex flex-col min-h-[200px]">
+                                    {currentInputCode ? (
+                                        <TypewriterCode code={currentInputCode} />
+                                    ) : (
+                                        <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-sm italic border-2 border-dashed border-slate-700/50 rounded-lg bg-slate-800/20">
+                                            <QIcon name="Activity" className="w-8 h-8 mb-2 opacity-30" />
+                                            Awaiting Data Stream...
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="flex-1 p-4 flex flex-col min-h-[240px]">
-                                {currentInputCode ? (
-                                    <TypewriterCode code={currentInputCode} />
-                                ) : (
-                                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-sm italic border-2 border-dashed border-slate-700/50 rounded-lg bg-slate-800/20">
-                                        <QIcon name="Activity" className="w-8 h-8 mb-2 opacity-30" />
-                                        Awaiting Data Stream...
-                                    </div>
-                                )}
-                            </div>
+
+                            {/* NEW: Telemetry Panel */}
+                            <TelemetryPanel active={step >= 1 && step <= 4} isZeroTrust={isZeroTrust} />
+                            
                         </div>
 
                         {/* Panel 2: Policy */}
@@ -622,7 +689,6 @@ Content-Type: application/json
                                     <QIcon name="Terminal" className="w-4 h-4 text-emerald-400" />
                                     Hexagon™ NPU Log
                                 </h3>
-                                {/* Fixed StatusBadge Logic Call */}
                                 <StatusBadge status={getStatus()} />
                             </div>
                             <div className="flex-1 min-h-[240px] bg-[#0a0f1c]">
