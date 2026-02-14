@@ -160,7 +160,7 @@
             );
         };
 
-        // --- NEW: Tech Detail Modal Component ---
+        // --- UPDATED: Tech Detail Modal Component (v1.6) ---
         const TechDetailModal = ({ type, onClose }) => {
             const content = {
                 BASIS: {
@@ -169,7 +169,8 @@
                         { label: "Public Standards", value: "ARM TrustZone Architecture, GlobalPlatform TEE Client API Spec" },
                         { label: "Target Hardware Assumption", value: "Cortex-A Series @ 1GHz+ (Dragonwing Proxy)" },
                         { label: "Memory Constraints", value: "Typical TEE Reserved RAM: 4MB – 16MB" },
-                        { label: "Disclaimer", value: "Values presented are analytical estimations derived from component decomposition, not measured on physical Dragonwing silicon." }
+                        { label: "TEE Implementation Scope", value: "Model assumes generic GlobalPlatform-compliant TEE environment. Implementation-agnostic (not tied to specific Qualcomm QSEE build)." },
+                        { label: "Disclaimer", value: "Values presented are analytical engineering estimations derived from public architecture specifications and component-level decomposition. Not measured on physical Dragonwing silicon." }
                     ]
                 },
                 STATIC: {
@@ -187,16 +188,16 @@
                         { label: "Stack Size", value: "~16KB (Shallow recursion depth enforced)" },
                         { label: "Heap Buffer", value: "~64KB (Reserved for JSON payload parsing & AST construction)" },
                         { label: "Shared Memory", value: "~32KB (Non-Secure World communication buffer)" },
-                        { label: "Constraint", value: "Single Trusted Application (TA) instance. Concurrency not modeled in this estimation." }
+                        { label: "Constraint", value: "Single Trusted Application (TA) instance assumed. Concurrency not modeled. 112KB represents estimated peak secure memory footprint for one TA instance." }
                     ]
                 },
                 LATENCY: {
                     title: "Latency Calculation Model",
                     items: [
                         { label: "Context Switch", value: "3 – 5 μs (Physical World Switch Overhead)" },
-                        { label: "Rule Evaluation", value: "~1.5 μs per rule (Integer-based comparison)" },
+                        { label: "Rule Evaluation", value: "~1.5 μs per rule (Integer comparison logic, no dynamic allocation inside evaluation loop)." },
                         { label: "Crypto Ops", value: "Assumes Hexagon DSP / Cryptographic Engine hardware acceleration" },
-                        { label: "Worst Case Model", value: "Accumulated Latency < 0.5ms vs Industrial Tolerance (10-50ms)" }
+                        { label: "Worst Case Model", value: "Worst-case accumulated latency < 0.5ms. Computed via additive model: context switch + rule evaluation + hardware-accelerated crypto." }
                     ]
                 }
             };
@@ -222,7 +223,10 @@
                                     </div>
                                 ))}
                             </div>
-                            <div className="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-600 italic text-center">
+                            <div className="mt-4 pt-3 border-t border-slate-800 text-[9px] text-slate-500 font-mono leading-tight">
+                                Scope: Analytical feasibility model. Not stress-tested under multi-TA fragmentation or concurrent secure sessions.
+                            </div>
+                            <div className="mt-2 text-[10px] text-slate-600 italic text-center">
                                 Engineering Reference • QITC 2026
                             </div>
                         </div>
