@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ARDUINO-Q 開發板 MPU邊緣運算+MCU(TrustZone-M)治理裝置平台</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         body { background-color: #0f172a; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow: hidden; }
@@ -24,9 +24,10 @@
 
         const App = () => {
             const [isRunning, setIsRunning] = useState(true);
-            const [demoSpeed, setDemoSpeed] = useState('slow'); // 'realtime' or 'slow'
+            const [demoSpeed, setDemoSpeed] = useState('slow'); 
             const [isModalOpen, setIsModalOpen] = useState(false);
             
+            // 任務管線狀態
             const [currentTask, setCurrentTask] = useState({ id: 'TASK-001', step: 0, total: 100, errors: [] });
             const [humanQueue, setHumanQueue] = useState([]); 
             const [pipelineLogs, setPipelineLogs] = useState([]);
@@ -46,51 +47,18 @@
 
             const getTime = () => new Date().toISOString().substring(11, 23);
 
-            const tick = () => {
-                if (!isRunning) return;
-
-                setCurrentTask(prev => {
-                    const nextStep = prev.step + 1;
-                    const cmdID = `${prev.id}-S${String(nextStep).padStart(3, '0')}`;
-                    
-                    const rand = Math.random();
-                    let error = null;
-                    let rawCmd = `{"task":"${prev.id}", "step":${nextStep}, "axis":"X", "speed":10}`;
-
-                    if (rand > 0.985) {
-                        error = { id: cmdID, type: 'malicious', rawCmd: `{"axis":"Z", "speed":999}`, msg: "嚴重參數越界" };
-                    } else if (rand > 0.95) {
-                        error = { id: cmdID, type: 'require_human', rawCmd: `{"axis":"Y", "speed":"ERROR"}`, aiFixed: `{"axis":"Y", "speed":50}`, msg: "邏輯模糊" };
-                    } else if (rand > 0.91) {
-                        error = { id: cmdID, type: 'typo', rawCmd: `{"axis":"Y", "speeed":20}`, aiFixed: `{"axis":"Y", "speed":20}`, msg: "語法偏移" };
-                    }
-
-                    setPipelineLogs(l => [{ id: cmdID, cmd: rawCmd, type: error?.type || 'normal' }, ...l].slice(0, 30));
-                    
-                    const newErrors = error ? [...prev.errors, error] : prev.errors;
-
-                    if (nextStep >= 100) {
-                        finalizeTask(prev.id, newErrors);
-                        taskIDRef.current += 1;
-                        return { id: `TASK-${String(taskIDRef.current).padStart(3, '0')}`, step: 0, total: 100, errors: [] };
-                    }
-
-                    return { ...prev, step: nextStep, errors: newErrors };
-                });
-            };
-
             const finalizeTask = (taskID, errors) => {
                 if (errors.length === 0) {
-                    setAdjudicationLogs(l => [{ taskID, status: 'O', msg: '整組任務驗證通過', time: getTime() }, ...l]);
+                    setAdjudicationLogs(l => [{ taskID, status: 'O', msg: '整組任務驗證通過', time: getTime() }, ...l].slice(0, 50));
                     generateEvidence(taskID, 'TASK_ALLOW');
                 } else {
-                    setAdjudicationLogs(l => [{ taskID, status: '-', msg: `檢出 ${errors.length} 處異常，進入異步修復`, time: getTime() }, ...l]);
+                    setAdjudicationLogs(l => [{ taskID, status: '-', msg: `檢出 ${errors.length} 處異常，進入異步修復`, time: getTime() }, ...l].slice(0, 50));
                     
                     const toAuto = errors.filter(e => e.type === 'typo');
                     const toHuman = errors.filter(e => e.type === 'require_human' || e.type === 'malicious');
 
                     toAuto.forEach(e => {
-                        setHealingLogs(l => [{ id: e.id, from: e.rawCmd, to: e.aiFixed, sim: '99% 自動修正' }, ...l]);
+                        setHealingLogs(l => [{ id: e.id, from: e.rawCmd, to: e.aiFixed, sim: '99% 自動修正' }, ...l].slice(0, 50));
                         generateEvidence(e.id, 'AUTO_HEALED');
                     });
 
@@ -109,15 +77,45 @@
                 prevHashRef.current = newHash;
             };
 
+            const tick = () => {
+                if (!isRunning) return;
+
+                setCurrentTask(prev => {
+                    const nextStep = prev.step + 1;
+                    const cmdID = `${prev.id}-S${String(nextStep).padStart(3, '0')}`;
+                    const rand = Math.random();
+                    let error = null;
+                    let rawCmd = `{"task":"${prev.id}", "step":${nextStep}, "axis":"X", "speed":10}`;
+
+                    if (rand > 0.985) {
+                        error = { id: cmdID, type: 'malicious', rawCmd: `{"axis":"Z", "speed":999}`, msg: "嚴重參數越界" };
+                    } else if (rand > 0.95) {
+                        error = { id: cmdID, type: 'require_human', rawCmd: `{"axis":"Y", "speed":"ERROR"}`, aiFixed: `{"axis":"Y", "speed":50}`, msg: "邏輯模糊" };
+                    } else if (rand > 0.91) {
+                        error = { id: cmdID, type: 'typo', rawCmd: `{"axis":"Y", "speeed":20}`, aiFixed: `{"axis":"Y", "speed":20}`, msg: "語法偏移" };
+                    }
+
+                    setPipelineLogs(l => [{ id: cmdID, cmd: rawCmd, type: error?.type || 'normal' }, ...l].slice(0, 30));
+                    const newErrors = error ? [...prev.errors, error] : prev.errors;
+
+                    if (nextStep >= 100) {
+                        finalizeTask(prev.id, newErrors);
+                        taskIDRef.current += 1;
+                        return { id: `TASK-${String(taskIDRef.current).padStart(3, '0')}`, step: 0, total: 100, errors: [] };
+                    }
+                    return { ...prev, step: nextStep, errors: newErrors };
+                });
+            };
+
             const handleHumanAction = (task, errorIdx, actionType, customCmd = null) => {
                 const error = task.errors[errorIdx];
                 if (actionType === 'ALLOW') {
-                    setHealingLogs(l => [{ id: error.id, from: error.rawCmd, to: error.aiFixed, sim: '100% 人工核准' }, ...l]);
+                    setHealingLogs(l => [{ id: error.id, from: error.rawCmd, to: error.aiFixed, sim: '100% 人工核准' }, ...l].slice(0, 50));
                     generateEvidence(error.id, 'HUMAN_ALLOW');
                 } else if (actionType === 'DENY') {
                     generateEvidence(error.id, 'HUMAN_DENY');
                 } else if (actionType === 'MANUAL') {
-                    setHealingLogs(l => [{ id: error.id, from: error.rawCmd, to: customCmd, sim: '100% 手動覆寫' }, ...l]);
+                    setHealingLogs(l => [{ id: error.id, from: error.rawCmd, to: customCmd, sim: '100% 手動覆寫' }, ...l].slice(0, 50));
                     generateEvidence(error.id, 'MANUAL_OVERRIDE');
                 }
 
@@ -135,8 +133,7 @@
             };
 
             useEffect(() => {
-                // 根據模式調整計時器
-                const speed = demoSpeed === 'realtime' ? 10 : 150; 
+                const speed = demoSpeed === 'realtime' ? 20 : 150; 
                 const interval = setInterval(tick, speed);
                 return () => clearInterval(interval);
             }, [isRunning, demoSpeed]);
@@ -155,26 +152,13 @@
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            {/* 速度切換開關 */}
                             <div className="flex bg-slate-800 rounded p-1 border border-slate-700">
-                                <button 
-                                    onClick={() => setDemoSpeed('realtime')}
-                                    className={`px-3 py-1 rounded text-[10px] font-bold transition-colors ${demoSpeed === 'realtime' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}
-                                >
-                                    Real-time
-                                </button>
-                                <button 
-                                    onClick={() => setDemoSpeed('slow')}
-                                    className={`px-3 py-1 rounded text-[10px] font-bold transition-colors ${demoSpeed === 'slow' ? 'bg-amber-600 text-white' : 'text-slate-500'}`}
-                                >
-                                    Slow-mo
-                                </button>
+                                <button onClick={() => setDemoSpeed('realtime')} className={`px-3 py-1 rounded text-[10px] font-bold transition-colors ${demoSpeed === 'realtime' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}>Real-time</button>
+                                <button onClick={() => setDemoSpeed('slow')} className={`px-3 py-1 rounded text-[10px] font-bold transition-colors ${demoSpeed === 'slow' ? 'bg-amber-600 text-white' : 'text-slate-500'}`}>Slow-mo</button>
                             </div>
-
                             <button onClick={() => setIsModalOpen(true)} className="bg-rose-600/20 border border-rose-500 text-rose-500 px-4 py-1.5 rounded text-sm font-bold">
                                 異常池 <span className="bg-rose-500 text-white px-2 rounded-full ml-1">{humanQueue.length}</span>
                             </button>
-                            
                             <button onClick={() => setIsRunning(!isRunning)} className={`px-4 py-1.5 rounded text-sm font-bold ${isRunning ? 'bg-slate-700' : 'bg-emerald-600'}`}>
                                 {isRunning ? '暫停' : '啟動'}
                             </button>
@@ -236,7 +220,41 @@
                         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-6">
                             <div className="bg-slate-900 border-2 border-amber-500 rounded-xl w-full max-w-4xl flex flex-col max-h-[85vh] shadow-2xl">
                                 <div className="bg-amber-950 px-6 py-4 border-b border-amber-900 flex justify-between items-center text-amber-400 font-bold">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-lg">異步待處理任務池 (Pending Pool)</span>
-                                    </div>
-                                    <button onClick={()
+                                    <span className="text-lg">異步待處理任務池 (Pending Pool)</span>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-2xl hover:text-white transition-colors">✕</button>
+                                </div>
+                                <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
+                                    {humanQueue.length === 0 ? <div className="text-center py-20 text-slate-500 italic">目前無待處理異常</div> :
+                                        humanQueue.map((task) => (
+                                            <div key={task.taskID} className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                                                <div className="text-blue-400 font-bold mb-4 border-b border-slate-700 pb-2">任務：{task.taskID}</div>
+                                                <div className="space-y-4">
+                                                    {task.errors.map((err, idx) => (
+                                                        <div key={idx} className="grid grid-cols-12 gap-4 items-center bg-slate-900/50 p-3 rounded border border-rose-900/20">
+                                                            <div className="col-span-2 text-[10px] text-slate-500 font-mono">{err.id}</div>
+                                                            <div className="col-span-3"><div className="text-rose-400 text-[10px] font-mono break-all line-through">{err.rawCmd}</div></div>
+                                                            <div className="col-span-3"><div className="text-emerald-400 text-[10px] font-mono break-all">{err.aiFixed || 'N/A'}</div></div>
+                                                            <div className="col-span-4 flex gap-1">
+                                                                <button onClick={() => handleHumanAction(task, idx, 'ALLOW')} className="flex-1 bg-emerald-700 hover:bg-emerald-600 py-1.5 rounded text-[10px] font-bold text-white transition-colors">ALLOW</button>
+                                                                <button onClick={() => handleHumanAction(task, idx, 'DENY')} className="flex-1 bg-rose-700 hover:bg-rose-600 py-1.5 rounded text-[10px] font-bold text-white transition-colors">DENY</button>
+                                                                <button onClick={() => {const edit = prompt('手動修復:', err.rawCmd); if(edit) handleHumanAction(task, idx, 'MANUAL', edit)}} className="flex-1 bg-blue-700 hover:bg-blue-600 py-1.5 rounded text-[10px] font-bold text-white transition-colors">EDIT</button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
