@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARMv8 TrustZone 治理裝置全功能模擬系統</title>
+    <title>ARDUINO-Q 開發板 MPU邊緣運算+MUC(TrustZone-M)治理裝置平台</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { background-color: #0f172a; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        body { background-color: #0f172a; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow: hidden; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
     </style>
 </head>
 <body>
@@ -22,159 +22,178 @@
         const { useState, useEffect, useRef } = React;
 
         const App = () => {
-            const [isOnline, setIsOnline] = useState(true);
-            const [highLoad, setHighLoad] = useState(false);
-            const [logs, setLogs] = useState([]);
-            const [evidenceChain, setEvidenceChain] = useState([]);
-            const [metrics, setMetrics] = useState({ smcLatency: '0.00', memUsage: '112.0', pendingQueue: 0 });
-            const [counter, setCounter] = useState(1000);
+            const [isRunning, setIsRunning] = useState(true);
+            const [pipelineLogs, setPipelineLogs] = useState([]);
+            const [adjudicationLogs, setAdjudicationLogs] = useState([]);
+            const [healingLogs, setHealingLogs] = useState([]);
+            const [evidenceLogs, setEvidenceLogs] = useState([]);
+            
+            const counterRef = useRef(1000);
             const prevHashRef = useRef("00000000000000000000000000000000");
 
-            // 模擬 SHA-256 (簡化版用於 UI 顯示)
             const mockHash = (str) => {
                 let hash = 0;
                 for (let i = 0; i < str.length; i++) hash = (hash << 5) - hash + str.charCodeAt(i) | 0;
                 return Math.abs(hash).toString(16).padStart(32, '0');
             };
 
-            const addLog = (domain, message, type = 'info') => {
-                setLogs(prev => [...prev.slice(-49), { id: Date.now(), time: new Date().toISOString().substring(11, 23), domain, message, type }]);
-            };
+            const getTime = () => new Date().toISOString().substring(11, 23);
 
-            const triggerInference = () => {
-                const eventId = `EVT-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-                const isViolation = Math.random() > 0.7;
-                const currentCounter = counter;
-
-                // 1. 常規世界 (Normal World) - 請求項 1a
-                addLog('Normal', `[${eventId}] NPU 產生推論輸出事件`);
-
-                // 模擬流量暴衝與背壓 (請求項 20)
-                if (highLoad && Math.random() > 0.5) {
-                    addLog('Hardware', `[${eventId}] 緩衝區達上限，觸發背壓訊號 (Backpressure)，限制生成速率`, 'warn');
-                    return;
+            const triggerEvent = () => {
+                const id = `CMD-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+                const rand = Math.random();
+                let eventType = 'normal';
+                let rawCmd = '{"axis":"X", "speed": 10}';
+                let fixedCmd = '';
+                
+                if (rand > 0.8) {
+                    eventType = 'malicious';
+                    rawCmd = '{"axis":"Z", "speed": 999, "override": true}';
+                } else if (rand > 0.5) {
+                    eventType = 'typo';
+                    rawCmd = '{"axis":"Y", "speeed": 20}';
+                    fixedCmd = '{"axis":"Y", "speed": 20}';
                 }
 
+                // 1. 執行管線 (MPU 邊緣生成)
+                setPipelineLogs(prev => [{ id, time: getTime(), cmd: rawCmd, type: eventType }, ...prev].slice(0, 50));
+
                 setTimeout(() => {
-                    // 2. SMC 跨界呼叫 (請求項 6)
-                    const smcDelay = (0.12 + Math.random() * 0.05).toFixed(2);
-                    setMetrics(m => ({ ...m, smcLatency: smcDelay }));
-                    addLog('SMC', `執行 Secure Monitor Call (延遲: ${smcDelay}ms)`);
-
-                    setTimeout(() => {
-                        // 3. 安全世界 (Secure World) 確定性裁決 (請求項 1b, 7, 8)
-                        addLog('Secure', `[${eventId}] 載入版本化規則集 (Zero-Trust Mode)`);
+                    // 2. 即時判定 (MCU TrustZone-M)
+                    if (eventType === 'normal') {
+                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: 'O', msg: '完全合規' }, ...prev].slice(0, 50));
+                        generateEvidence(id, 'ALLOW');
+                    } else if (eventType === 'malicious') {
+                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: 'X', msg: '參數越界/惡意指令' }, ...prev].slice(0, 50));
+                        generateEvidence(id, 'DENY');
+                    } else {
+                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: '-', msg: '語法結構異常 (Pending)' }, ...prev].slice(0, 50));
                         
-                        const action = isViolation ? 'DENY' : 'ALLOW';
-                        const logType = isViolation ? 'error' : 'success';
-                        addLog('Secure', `[${eventId}] 確定性裁決完成: 執行物理${action === 'DENY' ? '阻斷' : '放行'}`, logType);
-
-                        // 4. 斷網與存儲轉發機制 (請求項 17, 18)
-                        if (!isOnline && action === 'DENY') {
-                            setMetrics(m => ({ ...m, pendingQueue: m.pendingQueue + 1 }));
-                            addLog('Secure', `[${eventId}] 處於離線狀態，事件移入受保護佇列 (Pending Lock)`, 'warn');
-                            return; // 終止流程，等待連線
-                        }
-
-                        // 5. 證據封裝與 RPMB 寫入 (請求項 1c, 10, 11, 14, 15)
-                        const newHash = mockHash(`${eventId}${action}${currentCounter}${prevHashRef.current}`);
-                        const evidence = {
-                            id: eventId,
-                            action,
-                            counter: currentCounter,
-                            hash: newHash,
-                            prevHash: prevHashRef.current
-                        };
-
-                        prevHashRef.current = newHash;
-                        setCounter(c => c + 1);
-                        setEvidenceChain(prev => [evidence, ...prev].slice(0, 5));
-                        addLog('Hardware', `[${eventId}] 原子寫入 RPMB (Counter: ${currentCounter}, Hash: ${newHash.substring(0,8)}...)`, 'success');
-
-                    }, 200);
-                }, 100);
+                        setTimeout(() => {
+                            // 3. 即時修正 (MPU 結構修復)
+                            setHealingLogs(prev => [{ id, time: getTime(), from: rawCmd, to: fixedCmd, sim: '98%' }, ...prev].slice(0, 50));
+                            
+                            setTimeout(() => {
+                                // 修復後再次判定
+                                setAdjudicationLogs(prev => [{ id, time: getTime(), status: 'O', msg: '修復後合規放行' }, ...prev].slice(0, 50));
+                                generateEvidence(id, 'ALLOW_HEALED');
+                            }, 400);
+                        }, 600);
+                    }
+                }, 300);
             };
 
-            // 自動模擬推論流
+            const generateEvidence = (id, action) => {
+                const currentCounter = counterRef.current++;
+                const newHash = mockHash(`${id}${action}${currentCounter}${prevHashRef.current}`);
+                setEvidenceLogs(prev => [{ 
+                    id, 
+                    time: getTime(), 
+                    action, 
+                    counter: currentCounter.toString(16).toUpperCase(), 
+                    hash: newHash 
+                }, ...prev].slice(0, 50));
+                prevHashRef.current = newHash;
+            };
+
             useEffect(() => {
-                const interval = setInterval(triggerInference, highLoad ? 400 : 1500);
+                if (!isRunning) return;
+                const interval = setInterval(triggerEvent, 1200);
                 return () => clearInterval(interval);
-            }, [highLoad, isOnline, counter]);
+            }, [isRunning]);
 
             return (
-                <div className="min-h-screen p-6 flex flex-col gap-4">
-                    <header className="flex justify-between items-center pb-4 border-b border-slate-800">
-                        <div>
-                            <h1 className="text-2xl font-bold text-emerald-400">ARMv8 TrustZone 治理裝置模擬平台</h1>
-                            <p className="text-sm text-slate-400 mt-1">對齊專利請求項 1-22 之硬體強制隔離與不可回溯機制</p>
-                        </div>
-                        <div className="flex gap-4">
-                            <button onClick={() => setIsOnline(!isOnline)} className={`px-4 py-2 rounded font-bold text-xs ${isOnline ? 'bg-blue-600' : 'bg-rose-600'}`}>
-                                {isOnline ? '網路連線正常 (Sync ON)' : '離線模式 (Store-and-Forward)'}
-                            </button>
-                            <button onClick={() => setHighLoad(!highLoad)} className={`px-4 py-2 rounded font-bold text-xs ${highLoad ? 'bg-rose-600' : 'bg-slate-700'}`}>
-                                {highLoad ? '流量暴衝 (高負載)' : '常規流量'}
-                            </button>
-                        </div>
+                <div className="h-screen p-4 flex flex-col gap-4">
+                    <header className="flex justify-between items-center pb-2 border-b border-slate-700">
+                        <h1 className="text-xl font-bold text-cyan-400 tracking-wider">
+                            ARDUINO-Q 開發板 MPU邊緣運算+MUC(TrustZone-M)治理裝置平台
+                        </h1>
+                        <button 
+                            onClick={() => setIsRunning(!isRunning)} 
+                            className={`px-4 py-1 rounded text-sm font-bold ${isRunning ? 'bg-rose-600' : 'bg-emerald-600'}`}
+                        >
+                            {isRunning ? '暫停展示' : '啟動展示'}
+                        </button>
                     </header>
 
-                    {/* 硬體參數監控儀表板 */}
-                    <div className="grid grid-cols-4 gap-4">
-                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
-                            <div className="text-xs text-slate-400">SMC Context Switch (請求項 6)</div>
-                            <div className="text-xl font-bold text-amber-400">{metrics.smcLatency} ms</div>
-                        </div>
-                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
-                            <div className="text-xs text-slate-400">靜態記憶體配置 (請求項 7)</div>
-                            <div className="text-xl font-bold text-emerald-400">{metrics.memUsage} KB</div>
-                        </div>
-                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
-                            <div className="text-xs text-slate-400">待決事件佇列 (請求項 17)</div>
-                            <div className="text-xl font-bold text-rose-400">{metrics.pendingQueue} Events</div>
-                        </div>
-                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
-                            <div className="text-xs text-slate-400">硬體單調計數器 (請求項 15)</div>
-                            <div className="text-xl font-bold text-blue-400">0x{counter.toString(16).toUpperCase()}</div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-6 mt-4 flex-1">
-                        {/* 系統即時日誌 */}
-                        <div className="col-span-2 bg-[#05080f] border border-slate-800 rounded flex flex-col">
-                            <div className="p-3 border-b border-slate-800 font-bold text-sm bg-slate-900/50">雙安全域執行管線 (Dual Security Domains)</div>
-                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-1 h-[500px]">
-                                {logs.map(log => (
-                                    <div key={log.id} className="text-[11px] flex gap-3">
-                                        <span className="text-slate-500">{log.time}</span>
-                                        <span className={`w-16 font-bold ${log.domain === 'Normal' ? 'text-blue-400' : log.domain === 'Secure' ? 'text-emerald-400' : log.domain === 'SMC' ? 'text-amber-400' : 'text-purple-400'}`}>
-                                            [{log.domain}]
-                                        </span>
-                                        <span className={`${log.type === 'error' ? 'text-rose-400' : log.type === 'warn' ? 'text-amber-400' : log.type === 'success' ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                            {log.message}
-                                        </span>
-                                    </div>
-                                ))}
+                    <div className="grid grid-cols-2 grid-rows-2 gap-4 h-[calc(100vh-80px)]">
+                        
+                        {/* 1. 執行管線 */}
+                        <div className="bg-slate-900 border border-blue-900 rounded-lg flex flex-col overflow-hidden">
+                            <div className="bg-blue-950 px-3 py-2 border-b border-blue-900 text-sm font-bold text-blue-300">
+                                [1] MPU 邊緣執行管線 (原始推論事件流)
                             </div>
-                        </div>
-
-                        {/* 證據鏈狀態 */}
-                        <div className="bg-[#05080f] border border-slate-800 rounded flex flex-col">
-                            <div className="p-3 border-b border-slate-800 font-bold text-sm bg-slate-900/50">不可變更之證據鏈 (請求項 11, 14)</div>
-                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3">
-                                {evidenceChain.map((ev, idx) => (
-                                    <div key={idx} className="bg-slate-800/30 p-3 rounded border border-slate-700/50 text-[10px]">
-                                        <div className="flex justify-between mb-1">
-                                            <span className="font-bold text-slate-300">{ev.id}</span>
-                                            <span className={ev.action === 'ALLOW' ? 'text-emerald-400' : 'text-rose-400'}>{ev.action}</span>
+                            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-2">
+                                {pipelineLogs.map(log => (
+                                    <div key={log.id+log.type} className="text-xs font-mono">
+                                        <span className="text-slate-500">[{log.time}]</span> 
+                                        <span className="text-blue-400 ml-2">{log.id}</span>
+                                        <div className={`mt-1 pl-4 ${log.type === 'malicious' ? 'text-rose-400' : log.type === 'typo' ? 'text-amber-400' : 'text-slate-300'}`}>
+                                            {log.cmd}
                                         </div>
-                                        <div className="text-slate-500 mb-1">Counter: 0x{ev.counter.toString(16).toUpperCase()}</div>
-                                        <div className="text-slate-500 truncate">Prev: {ev.prevHash}</div>
-                                        <div className="text-amber-500 truncate mt-1">Hash: {ev.hash}</div>
                                     </div>
                                 ))}
-                                {evidenceChain.length === 0 && <div className="text-slate-600 text-xs text-center mt-10">等待治理資料寫入...</div>}
                             </div>
                         </div>
+
+                        {/* 2. 即時判定 */}
+                        <div className="bg-slate-900 border border-rose-900 rounded-lg flex flex-col overflow-hidden">
+                            <div className="bg-rose-950 px-3 py-2 border-b border-rose-900 text-sm font-bold text-rose-300">
+                                [2] MCU TrustZone-M 即時裁決 (零信任硬體閘門)
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-2">
+                                {adjudicationLogs.map((log, i) => (
+                                    <div key={i} className="text-xs font-mono flex items-center justify-between bg-slate-800/50 p-2 rounded">
+                                        <div>
+                                            <span className="text-slate-500">[{log.time}]</span>
+                                            <span className="text-rose-300 ml-2">{log.id}</span>
+                                            <span className="text-slate-300 ml-3">{log.msg}</span>
+                                        </div>
+                                        <div className={`text-lg font-bold ${log.status === 'O' ? 'text-emerald-500' : log.status === 'X' ? 'text-rose-500' : 'text-amber-500'}`}>
+                                            [{log.status}]
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 3. 即時修正 */}
+                        <div className="bg-slate-900 border border-amber-900 rounded-lg flex flex-col overflow-hidden">
+                            <div className="bg-amber-950 px-3 py-2 border-b border-amber-900 text-sm font-bold text-amber-300">
+                                [3] MPU 相似度即時修正 (Self-Healing)
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-2">
+                                {healingLogs.map((log, i) => (
+                                    <div key={i} className="text-xs font-mono bg-slate-800/50 p-2 rounded border border-amber-900/50">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-amber-400">{log.id}</span>
+                                            <span className="text-emerald-400">相似度: {log.sim}</span>
+                                        </div>
+                                        <div className="text-rose-400 line-through">{log.from}</div>
+                                        <div className="text-emerald-400 mt-1">➔ {log.to}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 4. 證據鏈 */}
+                        <div className="bg-slate-900 border border-emerald-900 rounded-lg flex flex-col overflow-hidden">
+                            <div className="bg-emerald-950 px-3 py-2 border-b border-emerald-900 text-sm font-bold text-emerald-300">
+                                [4] 不可變治理稽核帳本 (USB 實體證據鏈)
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-2">
+                                {evidenceLogs.map((log, i) => (
+                                    <div key={i} className="text-xs font-mono bg-slate-800/30 p-2 rounded border-l-2 border-emerald-500">
+                                        <div className="flex justify-between text-slate-400 mb-1">
+                                            <span>{log.id} | CTR: 0x{log.counter}</span>
+                                            <span className={log.action.includes('ALLOW') ? 'text-emerald-400' : 'text-rose-400'}>{log.action}</span>
+                                        </div>
+                                        <div className="text-emerald-500/80 truncate">Hash: {log.hash}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             );
