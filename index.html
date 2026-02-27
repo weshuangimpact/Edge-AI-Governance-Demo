@@ -3,885 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QITC 2026: Dragonwing Edge Governance (Zero Trust)</title>
-    
-    <script>
-        window.onerror = function(message, source, lineno, colno, error) {
-            var root = document.getElementById('root');
-            root.innerHTML = '<div style="background:#0f172a;color:#ef4444;padding:20px;height:100vh;font-family:monospace;overflow:auto;">' +
-                '<h2>System Error</h2>' +
-                '<p>' + message + '</p>' +
-                '<small>' + source + ':' + lineno + '</small>' +
-                '</div>';
-        };
-    </script>
-
+    <title>ARMv8 TrustZone 治理裝置全功能模擬系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
     <style>
-        body {
-            background-color: #0f172a;
-            background-image: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-                              radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.15) 0px, transparent 50%);
-            background-attachment: fixed;
-        }
-        .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
-        @keyframes scan-line {
-          0% { top: 0%; opacity: 0; }
-          100% { top: 100%; opacity: 0; }
-        }
-        .font-qualcomm { font-family: 'Segoe UI', system-ui, sans-serif; }
-        .tech-table td, .tech-table th { padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .tech-table th { text-align: left; color: #94a3b8; font-weight: 600; }
-        .tech-table tr:last-child td { border-bottom: none; }
-        
-        /* Modal Animation */
-        .modal-enter { opacity: 0; transform: scale(0.95); }
-        .modal-enter-active { opacity: 1; transform: scale(1); transition: opacity 200ms, transform 200ms; }
-        .modal-exit { opacity: 1; transform: scale(1); }
-        .modal-exit-active { opacity: 0; transform: scale(0.95); transition: opacity 200ms, transform 200ms; }
+        body { background-color: #0f172a; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
     </style>
 </head>
-<body class="text-slate-200 font-qualcomm antialiased">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 1. Internal SVG Icons ---
-        const Icon = ({ path, color = "currentColor", size = 20, className = "" }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                {path}
-            </svg>
-        );
-
-        const Icons = {
-            Shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
-            ShieldCheck: <g><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></g>,
-            ShieldLock: <g><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M12 8v4" /><path d="M12 16h.01" /></g>,
-            Cpu: <g><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M9 1v3" /><path d="M15 1v3" /><path d="M9 20v3" /><path d="M15 20v3" /><path d="M20 9h3" /><path d="M20 14h3" /><path d="M1 9h3" /><path d="M1 14h3" /></g>,
-            Activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
-            Terminal: <g><polyline points="4 17 10 11 4 5" /><line x1="12" x2="20" y1="19" y2="19" /></g>,
-            FileJson: <g><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M10 12a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1" /><path d="M14 18a1 1 0 0 0-1-1v-1a1 1 0 0 0 1-1" /></g>,
-            Lock: <g><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></g>,
-            UserCog: <g><circle cx="18" cy="15" r="3" /><circle cx="9" cy="7" r="4" /><path d="M10 15H6a4 4 0 0 0-4 4v2" /><path d="m21.7 16.4.9-.9" /><path d="m15.3 17.3.9-.9" /><path d="m21.7 13.6-.9-.9" /><path d="m15.3 12.7-.9-.9" /><path d="m19.7 21.7-.9-.9" /><path d="m17.3 15.3-.9-.9" /><path d="m19.7 8.3-.9-.9" /><path d="m17.3 11.7-.9-.9" /></g>,
-            Server: <g><rect width="20" height="8" x="2" y="2" rx="2" ry="2" /><rect width="20" height="8" x="2" y="14" rx="2" ry="2" /><line x1="6" x2="6.01" y1="6" y2="6" /><line x1="6" x2="6.01" y1="18" y2="18" /></g>,
-            Hash: <g><line x1="4" x2="20" y1="9" y2="9" /><line x1="4" x2="20" y1="15" y2="15" /><line x1="10" x2="8" y1="3" y2="21" /><line x1="16" x2="14" y1="3" y2="21" /></g>,
-            Wifi: <path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01" />,
-            WifiOff: <g><line x1="1" y1="1" x2="23" y2="23" /><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" /><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" /><path d="M10.71 5.05A16 16 0 0 1 22.58 9" /><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></g>,
-            CloudUpload: <g><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" /><path d="M12 12v9" /><path d="m16 16-4-4-4 4" /></g>,
-            BookOpen: <g><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></g>,
-            FileText: <g><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" x2="8" y1="13" y2="13" /><line x1="16" x2="8" y1="17" y2="17" /><line x1="10" x2="8" y1="9" y2="9" /></g>,
-            Info: <g><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="16" y2="12" /><line x1="12" x2="12.01" y1="8" y2="8" /></g>
-        };
-        const QIcon = ({ name, className }) => <Icon path={Icons[name]} className={className} />;
-
-        // --- 2. Utility Components ---
-
-        const StatusBadge = ({ status }) => {
-            const styles = {
-                IDLE: "bg-slate-800/50 text-slate-400 border-slate-700",
-                PROCESSING: "bg-blue-500/10 text-blue-400 border-blue-500/30 animate-pulse",
-                SUCCESS: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-                WARNING: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-                ERROR: "bg-red-500/10 text-red-400 border-red-500/30",
-                QUEUED: "bg-purple-500/10 text-purple-400 border-purple-500/30",
-                SYNCING: "bg-sky-500/10 text-sky-400 border-sky-500/30 animate-pulse",
-                BLOCKED: "bg-rose-500/10 text-rose-400 border-rose-500/30"
-            };
-            return (
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${styles[status] || styles.IDLE}`}>
-                {status}
-                </span>
-            );
-        };
-
-        const TypewriterCode = ({ code, highlightLine, highlightColor }) => {
-            return (
-                <div className="font-mono text-xs leading-5 p-3 bg-[#0a0f1c] rounded-lg border border-slate-800 overflow-hidden relative h-full shadow-inner">
-                <div className="absolute top-0 left-0 w-8 h-full bg-slate-900/30 border-r border-slate-800/50 text-slate-600 flex flex-col items-end pr-2 pt-3 select-none">
-                    {code.split('\n').map((_, i) => <div key={i}>{i + 1}</div>)}
-                </div>
-                <div className="pl-10 pt-0">
-                    {code.split('\n').map((line, i) => (
-                    <div key={i} className={`px-1 transition-colors duration-300 rounded ${
-                        highlightLine === i + 1 
-                        ? (highlightColor === 'red' ? 'bg-red-900/30 text-red-200 border-l-2 border-red-500' : 'bg-emerald-900/30 text-emerald-200 border-l-2 border-emerald-500') 
-                        : 'text-slate-400'
-                    }`}>
-                        {line || ' '}
-                    </div>
-                    ))}
-                </div>
-                </div>
-            );
-        };
-
-        const TerminalOutput = ({ logs }) => {
-            const endRef = useRef(null);
-            useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [logs]);
-
-            return (
-                <div className="h-full bg-[#0a0f1c] font-mono text-xs p-3 overflow-y-auto text-slate-300 custom-scrollbar rounded-b-lg">
-                <div className="text-slate-500 mb-3 pb-2 border-b border-slate-800 flex justify-between">
-                    <span>admin@dragonwing-platform:~# tail -f /var/log/rulepack.log</span>
-                    <span className="text-[10px] text-slate-600">Baud: 115200</span>
-                </div>
-                {logs.map((log, i) => (
-                    <div key={i} className="mb-1 break-words font-mono flex">
-                    <span className="text-slate-600 mr-3 min-w-[60px] text-right">[{log.time}]</span>
-                    <div className="flex-1">
-                        <span className={`font-bold mr-2 ${
-                            log.type === 'ERR' ? 'text-red-500' : 
-                            log.type === 'WARN' ? 'text-amber-500' : 
-                            log.type === 'OK' ? 'text-emerald-500' : 
-                            log.type === 'SYS' ? 'text-purple-400' : 
-                            log.type === 'SYNC' ? 'text-sky-400' : 
-                            log.type === 'ZERO' ? 'text-orange-400' : 'text-blue-400'
-                        }`}>{log.type}</span>
-                        <span className="text-slate-300">{log.text}</span>
-                    </div>
-                    </div>
-                ))}
-                <div ref={endRef} className="animate-pulse text-emerald-500 mt-2">_</div>
-                </div>
-            );
-        };
-
-        // --- UPDATED: Tech Detail Modal Component (v1.6) ---
-        const TechDetailModal = ({ type, onClose }) => {
-            const content = {
-                BASIS: {
-                    title: "Estimation Basis & Methodology",
-                    items: [
-                        { label: "Public Standards", value: "ARM TrustZone Architecture, GlobalPlatform TEE Client API Spec" },
-                        { label: "Target Hardware Assumption", value: "Cortex-A Series @ 1GHz+ (Dragonwing Proxy)" },
-                        { label: "Memory Constraints", value: "Typical TEE Reserved RAM: 4MB – 16MB" },
-                        { label: "TEE Implementation Scope", value: "Model assumes generic GlobalPlatform-compliant TEE environment. Implementation-agnostic (not tied to specific Qualcomm QSEE build)." },
-                        { label: "Disclaimer", value: "Values presented are analytical engineering estimations derived from public architecture specifications and component-level decomposition. Not measured on physical Dragonwing silicon." }
-                    ]
-                },
-                STATIC: {
-                    title: "Static Footprint Derivation",
-                    items: [
-                        { label: "Core Logic (Text)", value: "~128KB (Parser + FSM + SMC Interface)" },
-                        { label: "Crypto Library", value: "~45KB (mbedTLS trimmed to SHA-256/Ed25519 only)" },
-                        { label: "Rulepack Data", value: "~20KB (Based on binary-packed JSON, ~100 rules)" },
-                        { label: "Compiler Settings", value: "ARM GCC, Thumb-2 instruction set, -Os (Optimize for Size)" }
-                    ]
-                },
-                RUNTIME: {
-                    title: "Runtime Memory Model",
-                    items: [
-                        { label: "Stack Size", value: "~16KB (Shallow recursion depth enforced)" },
-                        { label: "Heap Buffer", value: "~64KB (Reserved for JSON payload parsing & AST construction)" },
-                        { label: "Shared Memory", value: "~32KB (Non-Secure World communication buffer)" },
-                        { label: "Constraint", value: "Single Trusted Application (TA) instance assumed. Concurrency not modeled. 112KB represents estimated peak secure memory footprint for one TA instance." }
-                    ]
-                },
-                LATENCY: {
-                    title: "Latency Calculation Model",
-                    items: [
-                        { label: "Context Switch", value: "3 – 5 μs (Physical World Switch Overhead)" },
-                        { label: "Rule Evaluation", value: "~1.5 μs per rule (Integer comparison logic, no dynamic allocation inside evaluation loop)." },
-                        { label: "Crypto Ops", value: "Assumes Hexagon DSP / Cryptographic Engine hardware acceleration" },
-                        { label: "Worst Case Model", value: "Worst-case accumulated latency < 0.5ms. Computed via additive model: context switch + rule evaluation + hardware-accelerated crypto." }
-                    ]
-                }
-            };
-
-            const data = content[type];
-
-            return (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="glass-panel w-[90%] max-w-md rounded-xl p-0 shadow-2xl border border-blue-500/30 overflow-hidden transform scale-100">
-                        <div className="bg-slate-900/80 p-3 border-b border-white/10 flex justify-between items-center">
-                            <h4 className="text-sm font-bold text-blue-400 flex items-center gap-2">
-                                <QIcon name="FileText" className="w-4 h-4" />
-                                {data.title}
-                            </h4>
-                            <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">✕</button>
-                        </div>
-                        <div className="p-4 bg-[#0a0f1c]">
-                            <div className="space-y-4">
-                                {data.items.map((item, idx) => (
-                                    <div key={idx} className="border-l-2 border-slate-700 pl-3">
-                                        <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-0.5">{item.label}</div>
-                                        <div className="text-xs text-slate-300 font-mono leading-relaxed">{item.value}</div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-4 pt-3 border-t border-slate-800 text-[9px] text-slate-500 font-mono leading-tight">
-                                Scope: Analytical feasibility model. Not stress-tested under multi-TA fragmentation or concurrent secure sessions.
-                            </div>
-                            <div className="mt-2 text-[10px] text-slate-600 italic text-center">
-                                Engineering Reference • QITC 2026
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // --- UPDATED: Telemetry + Technical Memo Panel ---
-        const TelemetryPanel = ({ active, onShowDetail }) => (
-            <div className={`rounded-xl glass-panel p-4 transition-all duration-500 border border-slate-700/50 flex flex-col gap-4 ${active ? 'opacity-100' : 'opacity-80 grayscale'}`}>
-                
-                {/* Section 1: Top Metrics (Dashboard) */}
-                <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <QIcon name="Cpu" className="w-3 h-3" />
-                        Hardware Telemetry
-                    </h3>
-                    <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 border border-slate-700">
-                         DRAGONWING DIGITAL TWIN
-                    </span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-900/50 p-2.5 rounded border border-white/10">
-                        <div className="text-[10px] text-white/70 mb-1 font-bold">NPU INFERENCE</div>
-                        <div className="flex flex-col">
-                            <div className="flex items-end gap-1">
-                                <span className="text-lg font-mono font-bold text-white">3.8</span>
-                                <span className="text-[10px] text-white/50 mb-1">ms</span>
-                            </div>
-                            <div className="text-[9px] text-emerald-400 font-mono italic">MobileNet v4 (INT8)</div>
-                        </div>
-                    </div>
-                    <div className="bg-slate-900/50 p-2.5 rounded border border-white/10">
-                        <div className="text-[10px] text-white/70 mb-1 font-bold">TRUSTZONE OVERHEAD</div>
-                        <div className="flex flex-col">
-                            <div className="flex items-end gap-1">
-                                <span className="text-lg font-mono font-bold text-white">&lt;0.5</span>
-                                <span className="text-[10px] text-white/50 mb-1">ms</span>
-                            </div>
-                            <div className="text-[9px] text-blue-400 font-mono italic">SMC Latency + Rule Eval</div>
-                        </div>
-                    </div>
-                    <div className="bg-slate-900/50 p-2.5 rounded border border-white/10">
-                        <div className="text-[10px] text-white/70 mb-1 font-bold">SECURE MEMORY</div>
-                        <div className="flex flex-col">
-                            <div className="flex items-end gap-1">
-                                <span className="text-lg font-mono font-bold text-white">112</span>
-                                <span className="text-[10px] text-white/50 mb-1">KB</span>
-                            </div>
-                            <div className="text-[9px] text-purple-400 font-mono italic">SRAM Footprint (Static)</div>
-                        </div>
-                    </div>
-                    <div className="bg-slate-900/50 p-2.5 rounded border border-white/10">
-                        <div className="text-[10px] text-white/70 mb-1 font-bold">POWER EFFICIENCY</div>
-                        <div className="flex flex-col">
-                            <div className="flex items-end gap-1">
-                                <span className="text-lg font-mono font-bold text-white">1.8</span>
-                                <span className="text-[10px] text-white/50 mb-1">W</span>
-                            </div>
-                            <div className="text-[9px] text-amber-400 font-mono italic">Max Load (-15% vs CPU)</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Section 2: Technical Memo (The Signboard) */}
-                <div className="mt-2 border-t border-slate-700/50 pt-3 flex-1 flex flex-col min-h-0">
-                    <div className="flex items-center gap-2 mb-2">
-                        <QIcon name="FileText" className="w-3 h-3 text-slate-500" />
-                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Technical Memo: Resource Estimation</h4>
-                    </div>
-                    
-                    <div className="bg-[#0f172a] rounded border border-slate-800 p-3 h-[200px] overflow-y-auto custom-scrollbar font-mono text-[9px] text-slate-400 leading-relaxed shadow-inner mb-3">
-                        <div className="mb-3 pb-2 border-b border-slate-800">
-                            <span className="text-blue-400 block">Subject: Memory Footprint & Overhead Analysis</span>
-                            <span className="block mt-1">Target Platform: Qualcomm Dragonwing (ARM Cortex-A)</span>
-                            <span className="block">Date: Feb 2026</span>
-                        </div>
-
-                        {/* 1. Static Flash */}
-                        <div className="mb-4">
-                            <strong className="text-slate-200 block mb-1">1. Static Flash/Storage Footprint</strong>
-                            <table className="w-full text-left tech-table collapse">
-                                <thead>
-                                    <tr><th>Component</th><th>Est.</th><th>Rationale</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td>Core Logic</td><td className="text-white">~128 KB</td><td>Parser, FSM, SMC Interface (Thumb-2)</td></tr>
-                                    <tr><td>Crypto Lib</td><td className="text-white">~45 KB</td><td>SHA-256 / Ed25519 (mbedTLS cut)</td></tr>
-                                    <tr><td>Default Rulepack</td><td className="text-white">~20 KB</td><td>JSON/Binary (50-100 rules)</td></tr>
-                                    <tr><td>Header & Sig</td><td className="text-white">~4 KB</td><td>GP TEE Header + Q-Signature</td></tr>
-                                    <tr className="bg-slate-800/30 font-bold"><td className="text-emerald-400">TOTAL STATIC</td><td className="text-emerald-400">~197 KB</td><td>&lt; 256KB (Negligible)</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* 2. Runtime RAM */}
-                        <div className="mb-4">
-                            <strong className="text-slate-200 block mb-1">2. Runtime Secure RAM Usage</strong>
-                            <table className="w-full text-left tech-table collapse">
-                                <thead>
-                                    <tr><th>Component</th><th>Est.</th><th>Rationale</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td>Stack Size</td><td className="text-white">~16 KB</td><td>Low recursion depth</td></tr>
-                                    <tr><td>Heap Size</td><td className="text-white">~64 KB</td><td>JSON Parsing Buffer / Queue</td></tr>
-                                    <tr><td>Secure Buffer</td><td className="text-white">~32 KB</td><td>Shared mem with Normal World</td></tr>
-                                    <tr className="bg-slate-800/30 font-bold"><td className="text-blue-400">TOTAL RAM</td><td className="text-blue-400">~112 KB</td><td>&lt; 1% of reserved TEE RAM</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* Section 3: Engineering References (Buttons) */}
-                    <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => onShowDetail('BASIS')} className="text-[9px] border border-slate-700 hover:border-blue-500/50 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-blue-300 rounded py-1.5 px-2 transition-all text-left flex items-center justify-between group">
-                            <span>Estimation Basis</span>
-                            <QIcon name="Info" className="w-2.5 h-2.5 opacity-50 group-hover:opacity-100" />
-                        </button>
-                        <button onClick={() => onShowDetail('STATIC')} className="text-[9px] border border-slate-700 hover:border-emerald-500/50 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-emerald-300 rounded py-1.5 px-2 transition-all text-left flex items-center justify-between group">
-                            <span>Static Footprint</span>
-                            <QIcon name="Info" className="w-2.5 h-2.5 opacity-50 group-hover:opacity-100" />
-                        </button>
-                        <button onClick={() => onShowDetail('RUNTIME')} className="text-[9px] border border-slate-700 hover:border-purple-500/50 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-purple-300 rounded py-1.5 px-2 transition-all text-left flex items-center justify-between group">
-                            <span>Runtime Memory</span>
-                            <QIcon name="Info" className="w-2.5 h-2.5 opacity-50 group-hover:opacity-100" />
-                        </button>
-                        <button onClick={() => onShowDetail('LATENCY')} className="text-[9px] border border-slate-700 hover:border-amber-500/50 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-amber-300 rounded py-1.5 px-2 transition-all text-left flex items-center justify-between group">
-                            <span>Latency Model</span>
-                            <QIcon name="Info" className="w-2.5 h-2.5 opacity-50 group-hover:opacity-100" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-
-        // --- 3. Main Application ---
-
-        function App() {
-            const [activeScenario, setActiveScenario] = useState(null);
-            const [step, setStep] = useState(0); 
-            const [terminalLogs, setTerminalLogs] = useState([]);
-            const [highlightRuleLine, setHighlightRuleLine] = useState(null);
-            const [showReviewModal, setShowReviewModal] = useState(false);
-            const [currentInputCode, setCurrentInputCode] = useState("");
-            const [reviewDiff, setReviewDiff] = useState({ original: "", fixed: "" });
-            const [executionHash, setExecutionHash] = useState("Waiting...");
+        const App = () => {
             const [isOnline, setIsOnline] = useState(true);
-            const [pendingQueue, setPendingQueue] = useState([]); 
-            const [isSyncing, setIsSyncing] = useState(false);
-            const [isZeroTrust, setIsZeroTrust] = useState(false);
-            
-            // New State for Tech Details
-            const [activeTechModal, setActiveTechModal] = useState(null);
+            const [highLoad, setHighLoad] = useState(false);
+            const [logs, setLogs] = useState([]);
+            const [evidenceChain, setEvidenceChain] = useState([]);
+            const [metrics, setMetrics] = useState({ smcLatency: '0.00', memUsage: '112.0', pendingQueue: 0 });
+            const [counter, setCounter] = useState(1000);
+            const prevHashRef = useRef("00000000000000000000000000000000");
 
-            const delay = (ms) => new Promise(res => setTimeout(res, ms));
-
-            const addTermLog = (type, text) => {
-                const time = new Date().toISOString().split('T')[1].slice(0, 8);
-                setTerminalLogs(prev => [...prev, { time, type, text }]);
+            // 模擬 SHA-256 (簡化版用於 UI 顯示)
+            const mockHash = (str) => {
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) hash = (hash << 5) - hash + str.charCodeAt(i) | 0;
+                return Math.abs(hash).toString(16).padStart(32, '0');
             };
 
-            const toggleZeroTrust = () => {
-                const newState = !isZeroTrust;
-                setIsZeroTrust(newState);
-                addTermLog("SYS", newState 
-                    ? "SECURITY LEVEL ELEVATED: ZERO TRUST MODE ACTIVE (WHITELIST ONLY)." 
-                    : "SECURITY LEVEL NORMAL: STANDARD FILTERING MODE.");
+            const addLog = (domain, message, type = 'info') => {
+                setLogs(prev => [...prev.slice(-49), { id: Date.now(), time: new Date().toISOString().substring(11, 23), domain, message, type }]);
             };
 
-            const toggleNetwork = async () => {
-                const nextState = !isOnline;
-                setIsOnline(nextState);
-                
-                if (nextState) {
-                    addTermLog("SYS", "NETWORK RESTORED (5G SA). INITIALIZING HANDSHAKE...");
-                    if (pendingQueue.length > 0) {
-                        setIsSyncing(true);
-                        await delay(800);
-                        addTermLog("SYNC", `FOUND ${pendingQueue.length} PENDING AUDIT LOGS IN TRUSTZONE.`);
-                        addTermLog("SYNC", "BATCH UPLOADING TO QUALCOMM CLOUD...");
-                        await delay(1000);
-                        const item = pendingQueue[0];
-                        if (item.type === 'HUMAN_LOOP') {
-                            addTermLog("SYNC", "VIOLATION #882 TRIGGERED CLOUD ALERT.");
-                            processPendingHumanLoop();
-                        } else {
-                            setPendingQueue([]);
-                            setIsSyncing(false);
-                            addTermLog("OK", "SYNC COMPLETE.");
+            const triggerInference = () => {
+                const eventId = `EVT-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+                const isViolation = Math.random() > 0.7;
+                const currentCounter = counter;
+
+                // 1. 常規世界 (Normal World) - 請求項 1a
+                addLog('Normal', `[${eventId}] NPU 產生推論輸出事件`);
+
+                // 模擬流量暴衝與背壓 (請求項 20)
+                if (highLoad && Math.random() > 0.5) {
+                    addLog('Hardware', `[${eventId}] 緩衝區達上限，觸發背壓訊號 (Backpressure)，限制生成速率`, 'warn');
+                    return;
+                }
+
+                setTimeout(() => {
+                    // 2. SMC 跨界呼叫 (請求項 6)
+                    const smcDelay = (0.12 + Math.random() * 0.05).toFixed(2);
+                    setMetrics(m => ({ ...m, smcLatency: smcDelay }));
+                    addLog('SMC', `執行 Secure Monitor Call (延遲: ${smcDelay}ms)`);
+
+                    setTimeout(() => {
+                        // 3. 安全世界 (Secure World) 確定性裁決 (請求項 1b, 7, 8)
+                        addLog('Secure', `[${eventId}] 載入版本化規則集 (Zero-Trust Mode)`);
+                        
+                        const action = isViolation ? 'DENY' : 'ALLOW';
+                        const logType = isViolation ? 'error' : 'success';
+                        addLog('Secure', `[${eventId}] 確定性裁決完成: 執行物理${action === 'DENY' ? '阻斷' : '放行'}`, logType);
+
+                        // 4. 斷網與存儲轉發機制 (請求項 17, 18)
+                        if (!isOnline && action === 'DENY') {
+                            setMetrics(m => ({ ...m, pendingQueue: m.pendingQueue + 1 }));
+                            addLog('Secure', `[${eventId}] 處於離線狀態，事件移入受保護佇列 (Pending Lock)`, 'warn');
+                            return; // 終止流程，等待連線
                         }
-                    } else {
-                        addTermLog("OK", "NO PENDING DATA.");
-                    }
-                } else {
-                    addTermLog("SYS", "NETWORK INTERFACE DOWN. SWITCHING TO ASYNC STORE-AND-FORWARD MODE.");
-                }
+
+                        // 5. 證據封裝與 RPMB 寫入 (請求項 1c, 10, 11, 14, 15)
+                        const newHash = mockHash(`${eventId}${action}${currentCounter}${prevHashRef.current}`);
+                        const evidence = {
+                            id: eventId,
+                            action,
+                            counter: currentCounter,
+                            hash: newHash,
+                            prevHash: prevHashRef.current
+                        };
+
+                        prevHashRef.current = newHash;
+                        setCounter(c => c + 1);
+                        setEvidenceChain(prev => [evidence, ...prev].slice(0, 5));
+                        addLog('Hardware', `[${eventId}] 原子寫入 RPMB (Counter: ${currentCounter}, Hash: ${newHash.substring(0,8)}...)`, 'success');
+
+                    }, 200);
+                }, 100);
             };
 
-            const processPendingHumanLoop = async () => {
-                setStep(3);
-                setReviewDiff({
-                    original: "SELECT * FROM sensor_logs",
-                    fixed: "SELECT * FROM sensor_logs LIMIT 100"
-                });
-                setShowReviewModal(true);
-                addTermLog("WAIT", "Cloud Admin Reviewing Queued Violation...");
-            };
-
-            const handleCloudApproval = async () => {
-                setShowReviewModal(false);
-                const count = pendingQueue.length;
-                setPendingQueue([]); 
-                setIsSyncing(false);
-
-                setCurrentInputCode(`POST /api/db/query
-{
-  "intent": "SQL_QUERY",
-  "query": "SELECT * FROM sensor_logs LIMIT 100",
-  "approver": "qitc_admin_cloud_01",
-  "sync_batch_size": ${count}
-}`);
-                addTermLog("OK", `Batch Modification Signed by Cloud Admin.`);
-                addTermLog("INFO", "Executing Delayed Task...");
-                await delay(800);
-                setStep(2); 
-                setHighlightRuleLine(13); 
-                addTermLog("OK", "Rulepack Re-evaluation: PASSED");
-                await delay(600);
-                setStep(4);
-                addTermLog("EXEC", "Executing safe query...");
-                addTermLog("OK", "Returned 100 records.");
-                setExecutionHash("0x9b2c...88a (Synced)");
-                await delay(3000);
-                reset();
-            };
-
-            // Dynamic Rulepack Display
-            const rulePackCode = isZeroTrust ?
-`{
-  "target_platform": "Dragonwing_v1",
-  "rulepack_id": "Q_EDGE_SEC_ZT_2026",
-  "mode": "ZERO_TRUST (WHITELIST)",
-  "default_effect": "DENY_ALL",
-  "rules": [
-    { 
-      "action": "NPU_INFERENCE", 
-      "auth": "STRICT_TOKEN_CHECK",
-      "model_whitelist": ["mobilenet_v4"],
-      "effect": "ALLOW" 
-    },
-    { 
-      "action": "SQL_QUERY", 
-      "schema_validation": "STRICT",
-      "limit": "REQUIRED", 
-      "effect": "ALLOW" 
-    }
-  ]
-}` : `{
-  "target_platform": "Dragonwing_v1",
-  "rulepack_id": "Q_EDGE_SEC_2026",
-  "mode": "STANDARD",
-  "default_effect": "ALLOW",
-  "rules": [
-    { 
-      "action": "NPU_INFERENCE", 
-      "model": "Q_AI_HUB_SIGNED",
-      "effect": "ALLOW" 
-    },
-    { 
-      "action": "SQL_QUERY", 
-      "limit": "unbounded", 
-      "effect": "FLAG_REVIEW" 
-    },
-    { 
-      "action": "SPU_ACCESS", 
-      "context": "root_override", 
-      "effect": "DENY" 
-    }
-  ]
-}`;
-
-            const reset = () => {
-                setStep(0);
-                setActiveScenario(null);
-                setHighlightRuleLine(null);
-                setShowReviewModal(false);
-                setCurrentInputCode("");
-                setExecutionHash("Waiting...");
-            };
-
-            const runScenario1 = async () => {
-                if (activeScenario || isSyncing) return;
-                reset();
-                setActiveScenario(1);
-                setTerminalLogs([]);
-                setStep(1);
-                setCurrentInputCode(`POST /api/ai/inference
-Host: arduino-uno-q-01
-X-Platform: Dragonwing
-Content-Type: application/json
-
-{
-  "intent": "NPU_INFERENCE",
-  "model_uri": "q_ai_hub://mobilenet_v4_quant",
-  "target": "hexagon_tensor_dsp"
-}`);
-                if (isOnline) {
-                    addTermLog("INFO", "Packet received via 5G NR (Snapdragon X80)");
-                } else {
-                    addTermLog("WARN", "Network Offline. Input via Local UART/SPI.");
-                }
-                
-                await delay(800);
-
-                if (isZeroTrust) {
-                    addTermLog("ZERO", "ZERO TRUST: Verifying Device Identity Token...");
-                    await delay(400);
-                    addTermLog("ZERO", "ZERO TRUST: Identity Verified (TrustZone).");
-                }
-
-                addTermLog("INFO", "Validating Q-Signature via Secure Processing Unit...");
-                await delay(600);
-                setStep(2);
-                addTermLog("SYS", `Loading Rulepack: ${isZeroTrust ? 'Q_EDGE_SEC_ZT' : 'Q_EDGE_SEC'} (Local Cache)...`);
-                await delay(500);
-                setHighlightRuleLine(isZeroTrust ? 7 : 7);
-                addTermLog("OK", isZeroTrust ? "MATCH: Whitelisted Model Hash." : "MATCH: Trusted Model from Qualcomm® AI Hub");
-                await delay(1000);
-                setStep(4);
-                
-                // Dynamic Inference Time Calculation
-                const baseLatency = 3.8;
-                const overhead = isZeroTrust ? 0.08 : 0.04;
-                const totalLatency = (baseLatency + overhead).toFixed(2);
-                
-                addTermLog("EXEC", "Offloading task to Hexagon™ NPU (Offline Mode Supported).");
-                addTermLog("EXEC", `Inference time: ${totalLatency}ms (Hexagon V75 NPU + Governance)`);
-                await delay(800);
-                addTermLog("OK", "Result returned. Power delta: -15%");
-                setExecutionHash("0xQ8a...77b (Immutable)");
-                await delay(3000);
-                reset();
-            };
-
-            const runScenario2 = async () => {
-                if (activeScenario || isSyncing) return;
-                reset();
-                setActiveScenario(2);
-                setTerminalLogs([]);
-                setStep(1);
-                setCurrentInputCode(`POST /api/db/query
-{
-  "intent": "SQL_QUERY",
-  "query": "SELECT * FROM sensor_logs",
-  "limit": null
-}`);
-                addTermLog("INFO", "Receiving payload on Control Plane");
-                await delay(800);
-                setStep(2);
-
-                if (isZeroTrust) {
-                      addTermLog("ZERO", "ZERO TRUST: Strict Schema Validation...");
-                      await delay(500);
-                      addTermLog("ZERO", "VIOLATION: Schema requires 'LIMIT' clause.");
-                } else {
-                    addTermLog("SYS", "Parsing syntax complexity...");
-                    await delay(600);
-                    addTermLog("WARN", "VIOLATION: Unbounded query on Edge Node");
-                }
-                
-                setHighlightRuleLine(isZeroTrust ? 13 : 13);
-                
-                if (!isOnline) {
-                    addTermLog("WARN", "OFFLINE DETECTED: Unable to reach Human Admin.");
-                    await delay(500);
-                    const queueId = '882_' + (pendingQueue.length + 1);
-                    addTermLog("SYS", `Action QUEUED in TrustZone Storage (ID: ${queueId}).`);
-                    addTermLog("SYS", "System returning to IDLE state for next instruction.");
-                    setPendingQueue(prev => [...prev, { type: 'HUMAN_LOOP', id: queueId }]);
-                    setExecutionHash("QUEUED_" + queueId);
-                    setStep(4);
-                    await delay(2000);
-                    reset();
-                    return; 
-                }
-
-                addTermLog("WARN", "Invoking QITC Operator Intervention...");
-                await delay(1000);
-                setStep(3);
-                setReviewDiff({
-                    original: "SELECT * FROM sensor_logs",
-                    fixed: "SELECT * FROM sensor_logs LIMIT 100"
-                });
-                setShowReviewModal(true);
-                addTermLog("WAIT", "Waiting for Admin Approval...");
-            };
-
-            const runScenario3 = async () => {
-                if (activeScenario || isSyncing) return;
-                reset();
-                setActiveScenario(3);
-                setTerminalLogs([]);
-                setStep(1);
-                setCurrentInputCode(`POST /api/sys/config
-{
-  "intent": "SPU_ACCESS",
-  "target": "root_keys",
-  "context": "root_override"
-}`);
-                addTermLog("WARN", "Privileged Hardware Access Detected");
-                await delay(800);
-                
-                if (isZeroTrust) {
-                    addTermLog("ZERO", "ZERO TRUST: Explicit Deny for Root Access.");
-                    await delay(200);
-                } else {
-                    setStep(2);
-                    addTermLog("SYS", "Scanning against TrustZone® Rulepack (Local)...");
-                    await delay(600);
-                }
-                
-                setHighlightRuleLine(isZeroTrust ? 5 : 18);
-                addTermLog("ERR", "CRITICAL BLOCK: Rule #3 (DENY)");
-                addTermLog("ERR", "Attempt to bypass Secure Boot Chain.");
-                await delay(1000);
-                setStep(4);
-                addTermLog("SEC", "Hardware Fuse Tripped (Simulation).");
-                addTermLog("SEC", "Isolating Arduino UNO Q Node.");
-                setExecutionHash("SEC_VIOLATION_Q992");
-                
-                if (isOnline) {
-                    addTermLog("AUDIT", "Report sent to Qualcomm Cloud.");
-                } else {
-                    addTermLog("AUDIT", "Report cached in Secure Storage (1MB reserved).");
-                }
-                await delay(3000);
-                reset();
-            };
-
-            const getStatus = () => {
-                if (isSyncing) return "SYNCING";
-                if (step === 4) {
-                    if (activeScenario === 3) return "ERROR";
-                    if (activeScenario === 2 && !isOnline) return "QUEUED";
-                    return "SUCCESS";
-                }
-                if (step === 2) return "PROCESSING";
-                if (step === 3) return "WARNING";
-                return "IDLE";
-            };
+            // 自動模擬推論流
+            useEffect(() => {
+                const interval = setInterval(triggerInference, highLoad ? 400 : 1500);
+                return () => clearInterval(interval);
+            }, [highLoad, isOnline, counter]);
 
             return (
-                <div className="min-h-screen p-6 flex flex-col gap-6 selection:bg-blue-500/30">
-                    
-                    {/* Tech Detail Modal */}
-                    {activeTechModal && (
-                        <TechDetailModal type={activeTechModal} onClose={() => setActiveTechModal(null)} />
-                    )}
-
-                    {/* Top Branding Bar */}
-                    <div className="glass-panel p-5 rounded-xl shadow-2xl z-20 sticky top-0 flex flex-col md:flex-row justify-between items-center border-t border-white/10">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-blue-700/20 border border-blue-500/30 rounded-lg flex items-center justify-center relative overflow-hidden group">
-                                <div className="absolute inset-0 bg-blue-600/20 blur-xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                                <QIcon name="Cpu" className="text-blue-400 w-7 h-7 relative z-10" />
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                                    QITC 2026 <span className="text-slate-500 font-light">|</span> Governance Demo
-                                </h1>
-                                <a href="#" target="_blank" className="flex items-center gap-1 text-[10px] text-blue-400/80 font-mono hover:text-blue-300 hover:underline mt-1 transition-colors">
-                                    <QIcon name="BookOpen" className="w-3 h-3" />
-                                    Institutional Acceptability Framework (SSRN Preprint)
-                                </a>
-                            </div>
+                <div className="min-h-screen p-6 flex flex-col gap-4">
+                    <header className="flex justify-between items-center pb-4 border-b border-slate-800">
+                        <div>
+                            <h1 className="text-2xl font-bold text-emerald-400">ARMv8 TrustZone 治理裝置模擬平台</h1>
+                            <p className="text-sm text-slate-400 mt-1">對齊專利請求項 1-22 之硬體強制隔離與不可回溯機制</p>
                         </div>
+                        <div className="flex gap-4">
+                            <button onClick={() => setIsOnline(!isOnline)} className={`px-4 py-2 rounded font-bold text-xs ${isOnline ? 'bg-blue-600' : 'bg-rose-600'}`}>
+                                {isOnline ? '網路連線正常 (Sync ON)' : '離線模式 (Store-and-Forward)'}
+                            </button>
+                            <button onClick={() => setHighLoad(!highLoad)} className={`px-4 py-2 rounded font-bold text-xs ${highLoad ? 'bg-rose-600' : 'bg-slate-700'}`}>
+                                {highLoad ? '流量暴衝 (高負載)' : '常規流量'}
+                            </button>
+                        </div>
+                    </header>
 
-                        <div className="flex flex-col items-end gap-2 mt-4 md:mt-0">
-                             <div className="flex gap-3">
-                                 {[
-                                    { id: 1, label: "AI Hub Inference", color: "bg-blue-600", hover: "hover:bg-blue-500", fn: runScenario1 },
-                                    { id: 2, label: "Human Loop", color: "bg-amber-600", hover: "hover:bg-amber-500", fn: runScenario2 },
-                                    { id: 3, label: "SPU Security", color: "bg-red-600", hover: "hover:bg-red-500", fn: runScenario3 },
-                                ].map(btn => (
-                                    <button key={btn.id} onClick={btn.fn} disabled={activeScenario || isSyncing}
-                                        className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100 shadow-lg ${activeScenario === btn.id ? 'ring-2 ring-white/50' : ''} ${btn.color} ${btn.hover} text-white`}>
-                                        {btn.label}
-                                    </button>
-                                ))}
-                            </div>
-                            
-                            <div className="flex items-center gap-2 text-xs text-blue-300/60 font-mono">
-                                {/* Zero Trust Toggle */}
-                                <button onClick={toggleZeroTrust} disabled={isSyncing || activeScenario}
-                                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all cursor-pointer ${
-                                        isZeroTrust 
-                                        ? "bg-orange-900/40 border-orange-500/50 text-orange-200 hover:bg-orange-900/60" 
-                                        : "bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-700"
-                                    }`} title="Toggle Whitelist Mode">
-                                    <QIcon name={isZeroTrust ? "ShieldLock" : "Shield"} className="w-3 h-3" />
-                                    {isZeroTrust ? "ZERO TRUST: STRICT" : "STANDARD: FILTERING"}
-                                </button>
-
-                                {/* Network Toggle */}
-                                <button onClick={toggleNetwork} disabled={isSyncing}
-                                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all cursor-pointer ${
-                                        isOnline 
-                                        ? "bg-blue-900/30 border-blue-800/50 hover:bg-blue-900/50" 
-                                        : "bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-700"
-                                    } ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`} title="Click to Simulate Network Loss">
-                                    <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-red-500"}`}></span>
-                                    {isOnline ? "5G SA: ON" : "OFFLINE: LOCAL"}
-                                </button>
-
-                                {/* Queue Indicator */}
-                                {pendingQueue.length > 0 && (
-                                    <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all bg-purple-900/40 border-purple-500/50 text-purple-200 animate-pulse`}>
-                                        <QIcon name="CloudUpload" className="w-3 h-3" />
-                                        <span>Pending: {pendingQueue.length}</span>
-                                    </div>
-                                )}
-                            </div>
+                    {/* 硬體參數監控儀表板 */}
+                    <div className="grid grid-cols-4 gap-4">
+                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                            <div className="text-xs text-slate-400">SMC Context Switch (請求項 6)</div>
+                            <div className="text-xl font-bold text-amber-400">{metrics.smcLatency} ms</div>
+                        </div>
+                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                            <div className="text-xs text-slate-400">靜態記憶體配置 (請求項 7)</div>
+                            <div className="text-xl font-bold text-emerald-400">{metrics.memUsage} KB</div>
+                        </div>
+                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                            <div className="text-xs text-slate-400">待決事件佇列 (請求項 17)</div>
+                            <div className="text-xl font-bold text-rose-400">{metrics.pendingQueue} Events</div>
+                        </div>
+                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                            <div className="text-xs text-slate-400">硬體單調計數器 (請求項 15)</div>
+                            <div className="text-xl font-bold text-blue-400">0x{counter.toString(16).toUpperCase()}</div>
                         </div>
                     </div>
 
-                    {/* Main Workspace */}
-                    <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 relative min-h-[600px]">
-                        
-                        {/* Overlay Modal (Review) */}
-                        {showReviewModal && (
-                            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 rounded-xl">
-                                <div className="glass-panel w-[90%] max-w-lg rounded-xl overflow-hidden shadow-2xl border border-amber-500/30 transform scale-100 transition-all">
-                                    <div className="bg-amber-900/20 p-4 border-b border-amber-500/20 flex justify-between items-center">
-                                        <div className="flex items-center gap-2 text-amber-400 font-bold">
-                                            <QIcon name="UserCog" className="w-5 h-5" /> 
-                                            {isSyncing ? "Cloud Sync: Delayed Review" : "Intervention Required"}
-                                        </div>
-                                        <span className="text-[10px] bg-amber-500/10 text-amber-300 px-2 py-1 rounded border border-amber-500/20 font-mono">QITC_FLAG_02</span>
+                    <div className="grid grid-cols-3 gap-6 mt-4 flex-1">
+                        {/* 系統即時日誌 */}
+                        <div className="col-span-2 bg-[#05080f] border border-slate-800 rounded flex flex-col">
+                            <div className="p-3 border-b border-slate-800 font-bold text-sm bg-slate-900/50">雙安全域執行管線 (Dual Security Domains)</div>
+                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-1 h-[500px]">
+                                {logs.map(log => (
+                                    <div key={log.id} className="text-[11px] flex gap-3">
+                                        <span className="text-slate-500">{log.time}</span>
+                                        <span className={`w-16 font-bold ${log.domain === 'Normal' ? 'text-blue-400' : log.domain === 'Secure' ? 'text-emerald-400' : log.domain === 'SMC' ? 'text-amber-400' : 'text-purple-400'}`}>
+                                            [{log.domain}]
+                                        </span>
+                                        <span className={`${log.type === 'error' ? 'text-rose-400' : log.type === 'warn' ? 'text-amber-400' : log.type === 'success' ? 'text-emerald-400' : 'text-slate-300'}`}>
+                                            {log.message}
+                                        </span>
                                     </div>
-                                    <div className="p-6 space-y-6">
-                                        <div className="space-y-2">
-                                            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Incoming Violation</div>
-                                            <div className="bg-red-950/30 border border-red-500/20 p-3 rounded-lg text-red-300 font-mono text-sm">
-                                                <span className="line-through decoration-red-500/50 decoration-2">{reviewDiff.original}</span>
-                                            </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 證據鏈狀態 */}
+                        <div className="bg-[#05080f] border border-slate-800 rounded flex flex-col">
+                            <div className="p-3 border-b border-slate-800 font-bold text-sm bg-slate-900/50">不可變更之證據鏈 (請求項 11, 14)</div>
+                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3">
+                                {evidenceChain.map((ev, idx) => (
+                                    <div key={idx} className="bg-slate-800/30 p-3 rounded border border-slate-700/50 text-[10px]">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="font-bold text-slate-300">{ev.id}</span>
+                                            <span className={ev.action === 'ALLOW' ? 'text-emerald-400' : 'text-rose-400'}>{ev.action}</span>
                                         </div>
-                                        <div className="flex justify-center -my-2 opacity-50">
-                                            <QIcon name="Server" className="w-5 h-5 text-slate-500" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <div className="text-xs text-emerald-400 font-bold uppercase tracking-wider">Suggested Fix (Safe)</div>
-                                            <div className="bg-emerald-950/30 border border-emerald-500/20 p-3 rounded-lg text-emerald-300 font-mono text-sm shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                                                {reviewDiff.fixed}
-                                            </div>
-                                        </div>
-                                        <div className="pt-4 flex justify-between items-center border-t border-white/5">
-                                            <div className="text-xs text-slate-500 flex items-center">
-                                                <QIcon name="Activity" className="w-3 h-3 mr-1.5 animate-pulse text-blue-400" /> 
-                                                Pending Cloud Approval...
-                                            </div>
-                                            <button onClick={handleCloudApproval} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded shadow-lg transition-colors">
-                                                Approve Fix
-                                            </button>
-                                        </div>
+                                        <div className="text-slate-500 mb-1">Counter: 0x{ev.counter.toString(16).toUpperCase()}</div>
+                                        <div className="text-slate-500 truncate">Prev: {ev.prevHash}</div>
+                                        <div className="text-amber-500 truncate mt-1">Hash: {ev.hash}</div>
                                     </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* COLUMN 1: Ingest + Telemetry + Memo */}
-                        <div className="lg:col-span-4 flex flex-col gap-6">
-                            
-                            {/* Panel 1: Ingest */}
-                            <div className={`flex-1 rounded-xl glass-panel flex flex-col transition-all duration-500 ${
-                                step === 1 ? 'border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/30' : 'opacity-70'
-                            }`}>
-                                <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-                                    <h3 className="text-sm font-bold text-blue-100 flex items-center gap-2">
-                                        <QIcon name="FileJson" className="w-4 h-4 text-blue-400" />
-                                        Payload Ingest
-                                    </h3>
-                                    <StatusBadge status={step === 1 ? "PROCESSING" : "IDLE"} />
-                                </div>
-                                <div className="flex-1 p-4 flex flex-col min-h-[200px]">
-                                    {currentInputCode ? (
-                                        <TypewriterCode code={currentInputCode} />
-                                    ) : (
-                                        <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-sm italic border-2 border-dashed border-slate-700/50 rounded-lg bg-slate-800/20">
-                                            <QIcon name="Activity" className="w-8 h-8 mb-2 opacity-30" />
-                                            Awaiting Data Stream...
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* UPDATED: Telemetry & Spec Sheet Panel with Modals */}
-                            <TelemetryPanel 
-                                active={step >= 1 && step <= 4} 
-                                onShowDetail={(type) => setActiveTechModal(type)}
-                            />
-                            
-                        </div>
-
-                        {/* Panel 2: Policy */}
-                        <div className={`lg:col-span-4 rounded-xl glass-panel flex flex-col transition-all duration-500 ${
-                            step === 2 || step === 3 ? 'border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.15)] ring-1 ring-indigo-500/30' : 'opacity-70'
-                        }`}>
-                            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-                                <h3 className="text-sm font-bold text-indigo-100 flex items-center gap-2">
-                                    <QIcon name={isZeroTrust ? "ShieldLock" : "ShieldCheck"} className="w-4 h-4 text-indigo-400" />
-                                    Edge Governance Rulepack
-                                </h3>
-                                <StatusBadge status={step === 2 ? "PROCESSING" : step === 3 ? "WARNING" : "IDLE"} />
-                            </div>
-                            <div className="flex-1 p-4 overflow-hidden relative min-h-[240px]">
-                                <TypewriterCode 
-                                    code={rulePackCode} 
-                                    highlightLine={highlightRuleLine}
-                                    highlightColor={activeScenario === 3 ? 'red' : 'green'}
-                                />
-                                {step === 2 && (
-                                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-indigo-500/10 to-transparent h-[20%] w-full animate-[scan-line_1.5s_linear_infinite]"></div>
-                                )}
+                                ))}
+                                {evidenceChain.length === 0 && <div className="text-slate-600 text-xs text-center mt-10">等待治理資料寫入...</div>}
                             </div>
                         </div>
-
-                        {/* Panel 3: Execution */}
-                        <div className={`lg:col-span-4 rounded-xl glass-panel flex flex-col transition-all duration-500 overflow-hidden ${
-                            step === 4 ? 'border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30' : 'opacity-70'
-                        }`}>
-                            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-                                <h3 className="text-sm font-bold text-emerald-100 flex items-center gap-2">
-                                    <QIcon name="Terminal" className="w-4 h-4 text-emerald-400" />
-                                    Hexagon™ NPU Log
-                                </h3>
-                                <StatusBadge status={getStatus()} />
-                            </div>
-                            <div className="flex-1 min-h-[240px] bg-[#0a0f1c]">
-                                <TerminalOutput logs={terminalLogs} />
-                            </div>
-                            <div className="px-3 py-2 bg-[#05080f] border-t border-slate-800 flex items-center gap-2 text-[10px] text-slate-500 font-mono">
-                                <QIcon name="Hash" className="w-3 h-3 text-slate-600" />
-                                <span className={`truncate transition-colors duration-500 ${step === 4 ? 'text-emerald-500' : ''}`}>
-                                    {executionHash}
-                                </span>
-                                {step === 4 && <QIcon name="Lock" className="w-3 h-3 text-emerald-500 ml-auto" />}
-                            </div>
-                        </div>
-
                     </div>
                 </div>
             );
-        }
+        };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
