@@ -54,7 +54,9 @@
                     rawCmd = '{"axis":"Z", "speed": 999, "override": true}';
                 } else if (rand > 0.70) {
                     eventType = 'require_human';
-                    rawCmd = '{"axis":"Y", "speed": "fast", "auth": null}'; // 參數型別錯誤或模糊
+                    rawCmd = '{"axis":"Y", "speed": "fast", "auth": null}'; 
+                    // 產生一個 AI 建議的修復指令
+                    fixedCmd = '{"axis":"Y", "speed": 50, "auth": "SYSTEM_DEFAULT"}';
                 } else if (rand > 0.50) {
                     eventType = 'typo';
                     rawCmd = '{"axis":"Y", "speeed": 20}';
@@ -85,9 +87,9 @@
                             }, 400);
                         }, 600);
                     } else if (eventType === 'require_human') {
-                        // 轉入人工審查佇列 (相似度 90%~95% 或 關鍵參數模糊)
+                        // 轉入人工審查佇列
                         setAdjudicationLogs(prev => [{ id, time: getTime(), status: '-', msg: '邏輯異常，維持實體鎖定 (Pending)' }, ...prev].slice(0, 50));
-                        setHumanQueue(prev => [{ id, time: getTime(), rawCmd }, ...prev]);
+                        setHumanQueue(prev => [{ id, time: getTime(), rawCmd, aiSuggestedCmd: fixedCmd }, ...prev]);
                     }
                 }, 300);
             };
@@ -105,22 +107,45 @@
                 prevHashRef.current = newHash;
             };
 
-            const handleHumanFix = (item) => {
+            const processHumanAction = (item, actionType, customCmd = null) => {
                 // 從待審查佇列移除
                 setHumanQueue(prev => prev.filter(q => q.id !== item.id));
                 
-                const fixedCmd = '{"axis":"Y", "speed": 50, "auth": "MANUAL"}';
-                
-                // 寫入修正日誌
-                setHealingLogs(prev => [{ id: item.id, time: getTime(), from: item.rawCmd, to: fixedCmd, sim: '100% 人工介入核准' }, ...prev].slice(0, 50));
-                
-                // 重新投入裁決迴圈
-                setTimeout(() => {
-                    setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'O', msg: '人工審查修正後合規放行' }, ...prev].slice(0, 50));
-                    generateEvidence(item.id, 'ALLOW_HUMAN_HEALED');
-                }, 400);
+                if (actionType === 'ALLOW') {
+                    // 使用 AI 建議的修復指令
+                    const finalCmd = item.aiSuggestedCmd;
+                    setHealingLogs(prev => [{ id: item.id, time: getTime(), from: item.rawCmd, to: finalCmd, sim: '100% 人工核准(採用AI建議)' }, ...prev].slice(0, 50));
+                    setTimeout(() => {
+                        setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'O', msg: '人工審查修正後合規放行' }, ...prev].slice(0, 50));
+                        generateEvidence(item.id, 'ALLOW_HUMAN_HEALED');
+                    }, 400);
+                } 
+                else if (actionType === 'DENY') {
+                    // 直接廢棄
+                    setTimeout(() => {
+                        setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'X', msg: '人工審查拒絕，強制廢棄' }, ...prev].slice(0, 50));
+                        generateEvidence(item.id, 'DENY_HUMAN_REJECTED');
+                    }, 400);
+                }
+                else if (actionType === 'MANUAL') {
+                    // 使用工程師手打的指令
+                    const finalCmd = customCmd || item.rawCmd;
+                    setHealingLogs(prev => [{ id: item.id, time: getTime(), from: item.rawCmd, to: finalCmd, sim: '100% 工程師手動覆寫' }, ...prev].slice(0, 50));
+                    setTimeout(() => {
+                        setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'O', msg: '手動覆寫後合規放行' }, ...prev].slice(0, 50));
+                        generateEvidence(item.id, 'ALLOW_MANUAL_OVERRIDE');
+                    }, 400);
+                }
                 
                 if(humanQueue.length <= 1) setIsModalOpen(false);
+            };
+
+            const handleManualEdit = (item) => {
+                // 使用原生的 prompt 作為次級輸入視窗
+                const userInput = prompt(`手動編輯指令 (${item.id}):\n請輸入修復後的 JSON 格式指令:`, item.rawCmd);
+                if (userInput !== null) {
+                    processHumanAction(item, 'MANUAL', userInput);
+                }
             };
 
             useEffect(() => {
@@ -136,7 +161,6 @@
                             ARDUINO-Q 開發板 MPU邊緣運算+MCU(TrustZone-M)治理裝置平台
                         </h1>
                         <div className="flex items-center gap-4">
-                            {/* 人工審查按鈕與計數器 */}
                             <button 
                                 onClick={() => setIsModalOpen(true)} 
                                 className="bg-amber-600 hover:bg-amber-500 transition-colors px-4 py-1.5 rounded text-sm font-bold flex items-center gap-2 shadow-lg"
@@ -256,18 +280,42 @@
                                                     <span className="text-blue-400 font-mono font-bold text-sm">{item.id}</span>
                                                     <span className="text-slate-400 text-xs font-mono">{item.time}</span>
                                                 </div>
-                                                <div className="mb-4">
-                                                    <div className="text-xs text-slate-400 mb-1">攔截之原始推論指令：</div>
-                                                    <div className="text-rose-400 font-mono text-sm bg-slate-900 p-2 rounded border border-rose-900/50">
-                                                        {item.rawCmd}
+                                                
+                                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                                    <div>
+                                                        <div className="text-xs text-slate-400 mb-1">1. 攔截之原始推論指令：</div>
+                                                        <div className="text-rose-400 font-mono text-xs bg-slate-900 p-2 rounded border border-rose-900/50 break-words line-through">
+                                                            {item.rawCmd}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-xs text-emerald-400 mb-1">2. AI自動建議修復後指令：</div>
+                                                        <div className="text-emerald-300 font-mono text-xs bg-emerald-950/30 p-2 rounded border border-emerald-900/50 break-words">
+                                                            {item.aiSuggestedCmd}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <button 
-                                                    onClick={() => handleHumanFix(item)} 
-                                                    className="w-full bg-emerald-700 hover:bg-emerald-600 py-2 rounded text-sm font-bold transition-colors tracking-wide text-white"
-                                                >
-                                                    確認結構意圖 ➔ 執行修復並送回硬體裁決迴圈
-                                                </button>
+                                                
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => processHumanAction(item, 'ALLOW')} 
+                                                        className="flex-1 bg-emerald-700 hover:bg-emerald-600 py-2 rounded text-sm font-bold transition-colors text-white"
+                                                    >
+                                                        ALLOW (採用建議)
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => processHumanAction(item, 'DENY')} 
+                                                        className="flex-1 bg-rose-700 hover:bg-rose-600 py-2 rounded text-sm font-bold transition-colors text-white"
+                                                    >
+                                                        DENY (直接廢棄)
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleManualEdit(item)} 
+                                                        className="flex-1 bg-blue-700 hover:bg-blue-600 py-2 rounded text-sm font-bold transition-colors text-white"
+                                                    >
+                                                        手動修復 (MANUAL)
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))
                                     }
