@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARDUINO-Q 開發板 MPU邊緣運算+MUC(TrustZone-M)治理裝置平台</title>
+    <title>ARDUINO-Q 開發板 MPU邊緣運算+MCU(TrustZone-M)治理裝置平台</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -23,6 +23,9 @@
 
         const App = () => {
             const [isRunning, setIsRunning] = useState(true);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [humanQueue, setHumanQueue] = useState([]);
+            
             const [pipelineLogs, setPipelineLogs] = useState([]);
             const [adjudicationLogs, setAdjudicationLogs] = useState([]);
             const [healingLogs, setHealingLogs] = useState([]);
@@ -46,10 +49,13 @@
                 let rawCmd = '{"axis":"X", "speed": 10}';
                 let fixedCmd = '';
                 
-                if (rand > 0.8) {
+                if (rand > 0.85) {
                     eventType = 'malicious';
                     rawCmd = '{"axis":"Z", "speed": 999, "override": true}';
-                } else if (rand > 0.5) {
+                } else if (rand > 0.70) {
+                    eventType = 'require_human';
+                    rawCmd = '{"axis":"Y", "speed": "fast", "auth": null}'; // 參數型別錯誤或模糊
+                } else if (rand > 0.50) {
                     eventType = 'typo';
                     rawCmd = '{"axis":"Y", "speeed": 20}';
                     fixedCmd = '{"axis":"Y", "speed": 20}';
@@ -66,19 +72,22 @@
                     } else if (eventType === 'malicious') {
                         setAdjudicationLogs(prev => [{ id, time: getTime(), status: 'X', msg: '參數越界/惡意指令' }, ...prev].slice(0, 50));
                         generateEvidence(id, 'DENY');
-                    } else {
-                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: '-', msg: '語法結構異常 (Pending)' }, ...prev].slice(0, 50));
+                    } else if (eventType === 'typo') {
+                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: '-', msg: '語法微小異常 (Pending)' }, ...prev].slice(0, 50));
                         
                         setTimeout(() => {
-                            // 3. 即時修正 (MPU 結構修復)
-                            setHealingLogs(prev => [{ id, time: getTime(), from: rawCmd, to: fixedCmd, sim: '98%' }, ...prev].slice(0, 50));
+                            // 3. 即時修正 (MPU 邊緣自動結構修復 > 98%)
+                            setHealingLogs(prev => [{ id, time: getTime(), from: rawCmd, to: fixedCmd, sim: '98% 自動修復' }, ...prev].slice(0, 50));
                             
                             setTimeout(() => {
-                                // 修復後再次判定
-                                setAdjudicationLogs(prev => [{ id, time: getTime(), status: 'O', msg: '修復後合規放行' }, ...prev].slice(0, 50));
+                                setAdjudicationLogs(prev => [{ id, time: getTime(), status: 'O', msg: '邊緣修復後合規放行' }, ...prev].slice(0, 50));
                                 generateEvidence(id, 'ALLOW_HEALED');
                             }, 400);
                         }, 600);
+                    } else if (eventType === 'require_human') {
+                        // 轉入人工審查佇列 (相似度 90%~95% 或 關鍵參數模糊)
+                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: '-', msg: '邏輯異常，維持實體鎖定 (Pending)' }, ...prev].slice(0, 50));
+                        setHumanQueue(prev => [{ id, time: getTime(), rawCmd }, ...prev]);
                     }
                 }, 300);
             };
@@ -96,6 +105,24 @@
                 prevHashRef.current = newHash;
             };
 
+            const handleHumanFix = (item) => {
+                // 從待審查佇列移除
+                setHumanQueue(prev => prev.filter(q => q.id !== item.id));
+                
+                const fixedCmd = '{"axis":"Y", "speed": 50, "auth": "MANUAL"}';
+                
+                // 寫入修正日誌
+                setHealingLogs(prev => [{ id: item.id, time: getTime(), from: item.rawCmd, to: fixedCmd, sim: '100% 人工介入核准' }, ...prev].slice(0, 50));
+                
+                // 重新投入裁決迴圈
+                setTimeout(() => {
+                    setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'O', msg: '人工審查修正後合規放行' }, ...prev].slice(0, 50));
+                    generateEvidence(item.id, 'ALLOW_HUMAN_HEALED');
+                }, 400);
+                
+                if(humanQueue.length <= 1) setIsModalOpen(false);
+            };
+
             useEffect(() => {
                 if (!isRunning) return;
                 const interval = setInterval(triggerEvent, 1200);
@@ -103,17 +130,30 @@
             }, [isRunning]);
 
             return (
-                <div className="h-screen p-4 flex flex-col gap-4">
+                <div className="h-screen p-4 flex flex-col gap-4 relative">
                     <header className="flex justify-between items-center pb-2 border-b border-slate-700">
                         <h1 className="text-xl font-bold text-cyan-400 tracking-wider">
-                            ARDUINO-Q 開發板 MPU邊緣運算+MUC(TrustZone-M)治理裝置平台
+                            ARDUINO-Q 開發板 MPU邊緣運算+MCU(TrustZone-M)治理裝置平台
                         </h1>
-                        <button 
-                            onClick={() => setIsRunning(!isRunning)} 
-                            className={`px-4 py-1 rounded text-sm font-bold ${isRunning ? 'bg-rose-600' : 'bg-emerald-600'}`}
-                        >
-                            {isRunning ? '暫停展示' : '啟動展示'}
-                        </button>
+                        <div className="flex items-center gap-4">
+                            {/* 人工審查按鈕與計數器 */}
+                            <button 
+                                onClick={() => setIsModalOpen(true)} 
+                                className="bg-amber-600 hover:bg-amber-500 transition-colors px-4 py-1.5 rounded text-sm font-bold flex items-center gap-2 shadow-lg"
+                            >
+                                人工審查作業
+                                <span className="bg-white text-amber-900 px-2 py-0.5 rounded-full text-xs font-black">
+                                    {humanQueue.length}
+                                </span>
+                            </button>
+                            
+                            <button 
+                                onClick={() => setIsRunning(!isRunning)} 
+                                className={`px-4 py-1.5 rounded text-sm font-bold ${isRunning ? 'bg-rose-600' : 'bg-emerald-600'}`}
+                            >
+                                {isRunning ? '暫停展示' : '啟動展示'}
+                            </button>
+                        </div>
                     </header>
 
                     <div className="grid grid-cols-2 grid-rows-2 gap-4 h-[calc(100vh-80px)]">
@@ -128,7 +168,7 @@
                                     <div key={log.id+log.type} className="text-xs font-mono">
                                         <span className="text-slate-500">[{log.time}]</span> 
                                         <span className="text-blue-400 ml-2">{log.id}</span>
-                                        <div className={`mt-1 pl-4 ${log.type === 'malicious' ? 'text-rose-400' : log.type === 'typo' ? 'text-amber-400' : 'text-slate-300'}`}>
+                                        <div className={`mt-1 pl-4 ${log.type === 'malicious' ? 'text-rose-400' : log.type === 'require_human' ? 'text-amber-400' : log.type === 'typo' ? 'text-purple-400' : 'text-slate-300'}`}>
                                             {log.cmd}
                                         </div>
                                     </div>
@@ -167,7 +207,7 @@
                                     <div key={i} className="text-xs font-mono bg-slate-800/50 p-2 rounded border border-amber-900/50">
                                         <div className="flex justify-between mb-1">
                                             <span className="text-amber-400">{log.id}</span>
-                                            <span className="text-emerald-400">相似度: {log.sim}</span>
+                                            <span className="text-emerald-400">{log.sim}</span>
                                         </div>
                                         <div className="text-rose-400 line-through">{log.from}</div>
                                         <div className="text-emerald-400 mt-1">➔ {log.to}</div>
@@ -195,6 +235,47 @@
                         </div>
 
                     </div>
+
+                    {/* 人工審查 Modal */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                            <div className="bg-slate-900 border-2 border-amber-500 rounded-lg w-full max-w-2xl flex flex-col max-h-[80vh] shadow-2xl">
+                                <div className="bg-amber-950 px-4 py-3 border-b border-amber-900 flex justify-between items-center">
+                                    <h2 className="text-amber-400 font-bold text-lg flex items-center gap-2">
+                                        ⚠️ 待決指令人工審查佇列 (Pending Queue)
+                                    </h2>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white font-bold text-xl">✕</button>
+                                </div>
+                                <div className="p-4 overflow-y-auto flex-1 space-y-4 custom-scrollbar">
+                                    {humanQueue.length === 0 ? 
+                                        <div className="text-slate-500 text-center py-10 font-mono">✅ 目前無待審查之例外指令</div> 
+                                    :
+                                        humanQueue.map(item => (
+                                            <div key={item.id} className="bg-slate-800 p-4 rounded border border-slate-700 shadow-inner">
+                                                <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
+                                                    <span className="text-blue-400 font-mono font-bold text-sm">{item.id}</span>
+                                                    <span className="text-slate-400 text-xs font-mono">{item.time}</span>
+                                                </div>
+                                                <div className="mb-4">
+                                                    <div className="text-xs text-slate-400 mb-1">攔截之原始推論指令：</div>
+                                                    <div className="text-rose-400 font-mono text-sm bg-slate-900 p-2 rounded border border-rose-900/50">
+                                                        {item.rawCmd}
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleHumanFix(item)} 
+                                                    className="w-full bg-emerald-700 hover:bg-emerald-600 py-2 rounded text-sm font-bold transition-colors tracking-wide text-white"
+                                                >
+                                                    確認結構意圖 ➔ 執行修復並送回硬體裁決迴圈
+                                                </button>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             );
         };
