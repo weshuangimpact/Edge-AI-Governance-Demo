@@ -23,6 +23,7 @@
 
         const App = () => {
             const [isRunning, setIsRunning] = useState(true);
+            const [isTaskPaused, setIsTaskPaused] = useState(false); // 模擬背壓/物理鎖定
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [humanQueue, setHumanQueue] = useState([]);
             
@@ -31,6 +32,9 @@
             const [healingLogs, setHealingLogs] = useState([]);
             const [evidenceLogs, setEvidenceLogs] = useState([]);
             
+            // 任務迴圈控制器
+            const taskIDRef = useRef(1);
+            const taskStepRef = useRef(1);
             const counterRef = useRef(1000);
             const prevHashRef = useRef("00000000000000000000000000000000");
 
@@ -43,53 +47,69 @@
             const getTime = () => new Date().toISOString().substring(11, 23);
 
             const triggerEvent = () => {
-                const id = `CMD-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+                // 如果系統處於暫停狀態（Pending），停止生成後續指令（背壓機制）
+                if (isTaskPaused) return;
+
+                const taskID = `TASK-${String(taskIDRef.current).padStart(3, '0')}`;
+                const step = taskStepRef.current;
+                const cmdID = `${taskID}-S${String(step).padStart(3, '0')}`;
+                
                 const rand = Math.random();
                 let eventType = 'normal';
-                let rawCmd = '{"axis":"X", "speed": 10}';
+                let rawCmd = `{"task":"${taskID}", "step": ${step}, "axis":"X", "speed": 10}`;
                 let fixedCmd = '';
                 
-                if (rand > 0.85) {
+                // 模擬第 100 步中隨機出現的異常
+                if (rand > 0.96) {
                     eventType = 'malicious';
-                    rawCmd = '{"axis":"Z", "speed": 999, "override": true}';
-                } else if (rand > 0.70) {
+                    rawCmd = `{"task":"${taskID}", "step": ${step}, "axis":"Z", "speed": 999, "override": true}`;
+                } else if (rand > 0.92) {
                     eventType = 'require_human';
-                    rawCmd = '{"axis":"Y", "speed": "fast", "auth": null}'; 
-                    // 產生一個 AI 建議的修復指令
-                    fixedCmd = '{"axis":"Y", "speed": 50, "auth": "SYSTEM_DEFAULT"}';
-                } else if (rand > 0.50) {
+                    rawCmd = `{"task":"${taskID}", "step": ${step}, "axis":"Y", "speed": "ERR_VAL", "auth": null}`;
+                    fixedCmd = `{"task":"${taskID}", "step": ${step}, "axis":"Y", "speed": 50, "auth": "SYSTEM_DEFAULT"}`;
+                } else if (rand > 0.88) {
                     eventType = 'typo';
-                    rawCmd = '{"axis":"Y", "speeed": 20}';
-                    fixedCmd = '{"axis":"Y", "speed": 20}';
+                    rawCmd = `{"task":"${taskID}", "step": ${step}, "axis":"Y", "speeed": 20}`;
+                    fixedCmd = `{"task":"${taskID}", "step": ${step}, "axis":"Y", "speed": 20}`;
                 }
 
-                // 1. 執行管線 (MPU 邊緣生成)
-                setPipelineLogs(prev => [{ id, time: getTime(), cmd: rawCmd, type: eventType }, ...prev].slice(0, 50));
+                // 1. MPU 執行管線
+                setPipelineLogs(prev => [{ id: cmdID, time: getTime(), cmd: rawCmd, type: eventType }, ...prev].slice(0, 50));
 
                 setTimeout(() => {
-                    // 2. 即時判定 (MCU TrustZone-M)
+                    // 2. MCU 即時判定
                     if (eventType === 'normal') {
-                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: 'O', msg: '完全合規' }, ...prev].slice(0, 50));
-                        generateEvidence(id, 'ALLOW');
+                        setAdjudicationLogs(prev => [{ id: cmdID, time: getTime(), status: 'O', msg: `Task組件[${step}/100] 合規` }, ...prev].slice(0, 50));
+                        generateEvidence(cmdID, 'ALLOW');
+                        
+                        // 推進步驟
+                        if (taskStepRef.current >= 100) {
+                            taskStepRef.current = 1;
+                            taskIDRef.current += 1;
+                        } else {
+                            taskStepRef.current += 1;
+                        }
                     } else if (eventType === 'malicious') {
-                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: 'X', msg: '參數越界/惡意指令' }, ...prev].slice(0, 50));
-                        generateEvidence(id, 'DENY');
+                        setIsTaskPaused(true); // 發生惡意指令，鎖定整組任務
+                        setAdjudicationLogs(prev => [{ id: cmdID, time: getTime(), status: 'X', msg: '嚴重違規：整組任務物理鎖定' }, ...prev].slice(0, 50));
+                        generateEvidence(cmdID, 'DENY_TASK_LOCK');
                     } else if (eventType === 'typo') {
-                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: '-', msg: '語法微小異常 (Pending)' }, ...prev].slice(0, 50));
+                        setIsTaskPaused(true); // 暫停，等待自動修復
+                        setAdjudicationLogs(prev => [{ id: cmdID, time: getTime(), status: '-', msg: '語法偏移：觸發邊緣自動修復' }, ...prev].slice(0, 50));
                         
                         setTimeout(() => {
-                            // 3. 即時修正 (MPU 邊緣自動結構修復 > 98%)
-                            setHealingLogs(prev => [{ id, time: getTime(), from: rawCmd, to: fixedCmd, sim: '98% 自動修復' }, ...prev].slice(0, 50));
-                            
+                            setHealingLogs(prev => [{ id: cmdID, time: getTime(), from: rawCmd, to: fixedCmd, sim: '99% 高度相似' }, ...prev].slice(0, 50));
                             setTimeout(() => {
-                                setAdjudicationLogs(prev => [{ id, time: getTime(), status: 'O', msg: '邊緣修復後合規放行' }, ...prev].slice(0, 50));
-                                generateEvidence(id, 'ALLOW_HEALED');
+                                setAdjudicationLogs(prev => [{ id: cmdID, time: getTime(), status: 'O', msg: '自動修復成功：恢復任務傳輸' }, ...prev].slice(0, 50));
+                                generateEvidence(cmdID, 'ALLOW_HEALED');
+                                setIsTaskPaused(false); // 恢復
+                                taskStepRef.current += 1;
                             }, 400);
                         }, 600);
                     } else if (eventType === 'require_human') {
-                        // 轉入人工審查佇列
-                        setAdjudicationLogs(prev => [{ id, time: getTime(), status: '-', msg: '邏輯異常，維持實體鎖定 (Pending)' }, ...prev].slice(0, 50));
-                        setHumanQueue(prev => [{ id, time: getTime(), rawCmd, aiSuggestedCmd: fixedCmd }, ...prev]);
+                        setIsTaskPaused(true); // 暫停，發送背壓訊號，等待人工介入
+                        setAdjudicationLogs(prev => [{ id: cmdID, time: getTime(), status: '-', msg: '邏輯模糊：等待人工授權審查' }, ...prev].slice(0, 50));
+                        setHumanQueue(prev => [{ id: cmdID, time: getTime(), rawCmd, aiSuggestedCmd: fixedCmd }, ...prev]);
                     }
                 }, 300);
             };
@@ -98,223 +118,142 @@
                 const currentCounter = counterRef.current++;
                 const newHash = mockHash(`${id}${action}${currentCounter}${prevHashRef.current}`);
                 setEvidenceLogs(prev => [{ 
-                    id, 
-                    time: getTime(), 
-                    action, 
-                    counter: currentCounter.toString(16).toUpperCase(), 
-                    hash: newHash 
+                    id, time: getTime(), action, counter: currentCounter.toString(16).toUpperCase(), hash: newHash 
                 }, ...prev].slice(0, 50));
                 prevHashRef.current = newHash;
             };
 
             const processHumanAction = (item, actionType, customCmd = null) => {
-                // 從待審查佇列移除
                 setHumanQueue(prev => prev.filter(q => q.id !== item.id));
                 
                 if (actionType === 'ALLOW') {
-                    // 使用 AI 建議的修復指令
                     const finalCmd = item.aiSuggestedCmd;
-                    setHealingLogs(prev => [{ id: item.id, time: getTime(), from: item.rawCmd, to: finalCmd, sim: '100% 人工核准(採用AI建議)' }, ...prev].slice(0, 50));
+                    setHealingLogs(prev => [{ id: item.id, time: getTime(), from: item.rawCmd, to: finalCmd, sim: '100% 人工驗證' }, ...prev].slice(0, 50));
                     setTimeout(() => {
-                        setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'O', msg: '人工審查修正後合規放行' }, ...prev].slice(0, 50));
-                        generateEvidence(item.id, 'ALLOW_HUMAN_HEALED');
+                        setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'O', msg: '人工放行：繼續執行任務組' }, ...prev].slice(0, 50));
+                        generateEvidence(item.id, 'ALLOW_HUMAN');
+                        setIsTaskPaused(false);
+                        taskStepRef.current += 1;
                     }, 400);
                 } 
                 else if (actionType === 'DENY') {
-                    // 直接廢棄
-                    setTimeout(() => {
-                        setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'X', msg: '人工審查拒絕，強制廢棄' }, ...prev].slice(0, 50));
-                        generateEvidence(item.id, 'DENY_HUMAN_REJECTED');
-                    }, 400);
+                    setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'X', msg: '人工廢棄：終止整組任務' }, ...prev].slice(0, 50));
+                    generateEvidence(item.id, 'DENY_TASK_ABORT');
+                    // 廢棄後重啟新任務
+                    taskStepRef.current = 1;
+                    taskIDRef.current += 1;
+                    setIsTaskPaused(false);
                 }
                 else if (actionType === 'MANUAL') {
-                    // 使用工程師手打的指令
                     const finalCmd = customCmd || item.rawCmd;
-                    setHealingLogs(prev => [{ id: item.id, time: getTime(), from: item.rawCmd, to: finalCmd, sim: '100% 工程師手動覆寫' }, ...prev].slice(0, 50));
+                    setHealingLogs(prev => [{ id: item.id, time: getTime(), from: item.rawCmd, to: finalCmd, sim: '100% 手動覆寫' }, ...prev].slice(0, 50));
                     setTimeout(() => {
-                        setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'O', msg: '手動覆寫後合規放行' }, ...prev].slice(0, 50));
-                        generateEvidence(item.id, 'ALLOW_MANUAL_OVERRIDE');
+                        setAdjudicationLogs(prev => [{ id: item.id, time: getTime(), status: 'O', msg: '覆寫成功：恢復任務進度' }, ...prev].slice(0, 50));
+                        generateEvidence(item.id, 'ALLOW_MANUAL');
+                        setIsTaskPaused(false);
+                        taskStepRef.current += 1;
                     }, 400);
                 }
-                
-                if(humanQueue.length <= 1) setIsModalOpen(false);
-            };
-
-            const handleManualEdit = (item) => {
-                // 使用原生的 prompt 作為次級輸入視窗
-                const userInput = prompt(`手動編輯指令 (${item.id}):\n請輸入修復後的 JSON 格式指令:`, item.rawCmd);
-                if (userInput !== null) {
-                    processHumanAction(item, 'MANUAL', userInput);
-                }
+                setIsModalOpen(false);
             };
 
             useEffect(() => {
                 if (!isRunning) return;
-                const interval = setInterval(triggerEvent, 1200);
+                const interval = setInterval(triggerEvent, 500); // 縮短間隔以展示 100 步的流暢度
                 return () => clearInterval(interval);
-            }, [isRunning]);
+            }, [isRunning, isTaskPaused]);
 
             return (
                 <div className="h-screen p-4 flex flex-col gap-4 relative">
                     <header className="flex justify-between items-center pb-2 border-b border-slate-700">
-                        <h1 className="text-xl font-bold text-cyan-400 tracking-wider">
-                            ARDUINO-Q 開發板 MPU邊緣運算+MCU(TrustZone-M)治理裝置平台
-                        </h1>
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-bold text-cyan-400">ARDUINO-Q 治理裝置平台 (交易式任務模擬)</h1>
+                            <div className="text-[10px] text-slate-500 font-mono">STATUS: {isTaskPaused ? '⚠️ BACKPRESSURE / LOCKED' : '✅ PIPELINE ACTIVE'}</div>
+                        </div>
                         <div className="flex items-center gap-4">
-                            <button 
-                                onClick={() => setIsModalOpen(true)} 
-                                className="bg-amber-600 hover:bg-amber-500 transition-colors px-4 py-1.5 rounded text-sm font-bold flex items-center gap-2 shadow-lg"
-                            >
-                                人工審查作業
-                                <span className="bg-white text-amber-900 px-2 py-0.5 rounded-full text-xs font-black">
-                                    {humanQueue.length}
-                                </span>
+                            <button onClick={() => setIsModalOpen(true)} className="bg-amber-600 px-4 py-1.5 rounded text-sm font-bold flex gap-2">
+                                人工審查 <span className="bg-white text-amber-900 px-2 rounded-full">{humanQueue.length}</span>
                             </button>
-                            
-                            <button 
-                                onClick={() => setIsRunning(!isRunning)} 
-                                className={`px-4 py-1.5 rounded text-sm font-bold ${isRunning ? 'bg-rose-600' : 'bg-emerald-600'}`}
-                            >
-                                {isRunning ? '暫停展示' : '啟動展示'}
+                            <button onClick={() => setIsRunning(!isRunning)} className={`px-4 py-1.5 rounded text-sm font-bold ${isRunning ? 'bg-rose-600' : 'bg-emerald-600'}`}>
+                                {isRunning ? '暫停' : '啟動'}
                             </button>
                         </div>
                     </header>
 
                     <div className="grid grid-cols-2 grid-rows-2 gap-4 h-[calc(100vh-80px)]">
-                        
-                        {/* 1. 執行管線 */}
                         <div className="bg-slate-900 border border-blue-900 rounded-lg flex flex-col overflow-hidden">
-                            <div className="bg-blue-950 px-3 py-2 border-b border-blue-900 text-sm font-bold text-blue-300">
-                                [1] MPU 邊緣執行管線 (原始推論事件流)
+                            <div className="bg-blue-950 px-3 py-2 text-sm font-bold text-blue-300 flex justify-between">
+                                <span>[1] MPU 邊緣執行管線</span>
+                                <span className="text-xs text-blue-400">任務進度: {taskStepRef.current}/100</span>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-2">
+                            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                                 {pipelineLogs.map(log => (
-                                    <div key={log.id+log.type} className="text-xs font-mono">
-                                        <span className="text-slate-500">[{log.time}]</span> 
-                                        <span className="text-blue-400 ml-2">{log.id}</span>
-                                        <div className={`mt-1 pl-4 ${log.type === 'malicious' ? 'text-rose-400' : log.type === 'require_human' ? 'text-amber-400' : log.type === 'typo' ? 'text-purple-400' : 'text-slate-300'}`}>
-                                            {log.cmd}
-                                        </div>
+                                    <div key={log.id} className="text-[10px] font-mono">
+                                        <span className="text-slate-500">[{log.time}]</span> <span className="text-blue-400">{log.id}</span>
+                                        <div className={`mt-1 pl-4 ${log.type !== 'normal' ? 'text-amber-400' : 'text-slate-400'}`}>{log.cmd}</div>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
-                        {/* 2. 即時判定 */}
                         <div className="bg-slate-900 border border-rose-900 rounded-lg flex flex-col overflow-hidden">
-                            <div className="bg-rose-950 px-3 py-2 border-b border-rose-900 text-sm font-bold text-rose-300">
-                                [2] MCU TrustZone-M 即時裁決 (零信任硬體閘門)
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-2">
+                            <div className="bg-rose-950 px-3 py-2 text-sm font-bold text-rose-300">[2] MCU TrustZone-M 即時裁決 (零信任閘門)</div>
+                            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                                 {adjudicationLogs.map((log, i) => (
-                                    <div key={i} className="text-xs font-mono flex items-center justify-between bg-slate-800/50 p-2 rounded">
-                                        <div>
-                                            <span className="text-slate-500">[{log.time}]</span>
-                                            <span className="text-rose-300 ml-2">{log.id}</span>
-                                            <span className="text-slate-300 ml-3">{log.msg}</span>
-                                        </div>
-                                        <div className={`text-lg font-bold ${log.status === 'O' ? 'text-emerald-500' : log.status === 'X' ? 'text-rose-500' : 'text-amber-500'}`}>
-                                            [{log.status}]
-                                        </div>
+                                    <div key={i} className="text-xs font-mono flex justify-between bg-slate-800/30 p-2 rounded">
+                                        <span className="text-slate-300">{log.msg}</span>
+                                        <span className={`font-bold ${log.status === 'O' ? 'text-emerald-500' : 'text-rose-500'}`}>[{log.status}]</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
-                        {/* 3. 即時修正 */}
                         <div className="bg-slate-900 border border-amber-900 rounded-lg flex flex-col overflow-hidden">
-                            <div className="bg-amber-950 px-3 py-2 border-b border-amber-900 text-sm font-bold text-amber-300">
-                                [3] MPU 相似度即時修正 (Self-Healing)
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-2">
+                            <div className="bg-amber-950 px-3 py-2 text-sm font-bold text-amber-300">[3] MPU 相似度即時修正 (Self-Healing)</div>
+                            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                                 {healingLogs.map((log, i) => (
-                                    <div key={i} className="text-xs font-mono bg-slate-800/50 p-2 rounded border border-amber-900/50">
-                                        <div className="flex justify-between mb-1">
-                                            <span className="text-amber-400">{log.id}</span>
-                                            <span className="text-emerald-400">{log.sim}</span>
-                                        </div>
-                                        <div className="text-rose-400 line-through">{log.from}</div>
-                                        <div className="text-emerald-400 mt-1">➔ {log.to}</div>
+                                    <div key={i} className="text-[10px] font-mono bg-slate-800/50 p-2 rounded border border-amber-900/30">
+                                        <div className="flex justify-between"><span className="text-amber-400">{log.id}</span><span className="text-emerald-400">{log.sim}</span></div>
+                                        <div className="text-rose-400 line-through truncate">{log.from}</div>
+                                        <div className="text-emerald-400 truncate">➔ {log.to}</div>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
-                        {/* 4. 證據鏈 */}
                         <div className="bg-slate-900 border border-emerald-900 rounded-lg flex flex-col overflow-hidden">
-                            <div className="bg-emerald-950 px-3 py-2 border-b border-emerald-900 text-sm font-bold text-emerald-300">
-                                [4] 不可變治理稽核帳本 (USB 實體證據鏈)
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-2">
+                            <div className="bg-emerald-950 px-3 py-2 text-sm font-bold text-emerald-300">[4] 不可變治理稽核帳本 (USB 實體證據鏈)</div>
+                            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                                 {evidenceLogs.map((log, i) => (
-                                    <div key={i} className="text-xs font-mono bg-slate-800/30 p-2 rounded border-l-2 border-emerald-500">
-                                        <div className="flex justify-between text-slate-400 mb-1">
-                                            <span>{log.id} | CTR: 0x{log.counter}</span>
-                                            <span className={log.action.includes('ALLOW') ? 'text-emerald-400' : 'text-rose-400'}>{log.action}</span>
-                                        </div>
-                                        <div className="text-emerald-500/80 truncate">Hash: {log.hash}</div>
+                                    <div key={i} className="text-[10px] font-mono bg-slate-800/30 p-2 rounded border-l-2 border-emerald-500">
+                                        <div className="flex justify-between text-slate-400"><span>{log.id}</span><span className="text-emerald-400">{log.action}</span></div>
+                                        <div className="text-emerald-500/60 truncate">Hash: {log.hash}</div>
                                     </div>
                                 ))}
                             </div>
                         </div>
-
                     </div>
 
-                    {/* 人工審查 Modal */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-                            <div className="bg-slate-900 border-2 border-amber-500 rounded-lg w-full max-w-2xl flex flex-col max-h-[80vh] shadow-2xl">
-                                <div className="bg-amber-950 px-4 py-3 border-b border-amber-900 flex justify-between items-center">
-                                    <h2 className="text-amber-400 font-bold text-lg flex items-center gap-2">
-                                        ⚠️ 待決指令人工審查佇列 (Pending Queue)
-                                    </h2>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white font-bold text-xl">✕</button>
+                        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+                            <div className="bg-slate-900 border-2 border-amber-500 rounded-lg w-full max-w-2xl flex flex-col">
+                                <div className="bg-amber-950 px-4 py-3 border-b border-amber-900 flex justify-between items-center text-amber-400 font-bold">
+                                    <span>⚠️ 任務阻塞：待決指令審查</span>
+                                    <button onClick={() => setIsModalOpen(false)}>✕</button>
                                 </div>
-                                <div className="p-4 overflow-y-auto flex-1 space-y-4 custom-scrollbar">
-                                    {humanQueue.length === 0 ? 
-                                        <div className="text-slate-500 text-center py-10 font-mono">✅ 目前無待審查之例外指令</div> 
-                                    :
+                                <div className="p-4 space-y-4">
+                                    {humanQueue.length === 0 ? <div className="text-center py-10">無待處理指令</div> :
                                         humanQueue.map(item => (
-                                            <div key={item.id} className="bg-slate-800 p-4 rounded border border-slate-700 shadow-inner">
-                                                <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
-                                                    <span className="text-blue-400 font-mono font-bold text-sm">{item.id}</span>
-                                                    <span className="text-slate-400 text-xs font-mono">{item.time}</span>
+                                            <div key={item.id} className="bg-slate-800 p-4 rounded space-y-3">
+                                                <div className="text-xs text-blue-400 font-bold">{item.id} 任務暫停點</div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><div className="text-[10px] text-slate-500 mb-1">攔截指令</div><div className="text-rose-400 bg-black p-2 rounded text-[10px] break-all">{item.rawCmd}</div></div>
+                                                    <div><div className="text-[10px] text-emerald-500 mb-1">AI建議修復</div><div className="text-emerald-400 bg-black p-2 rounded text-[10px] break-all">{item.aiSuggestedCmd}</div></div>
                                                 </div>
-                                                
-                                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                                    <div>
-                                                        <div className="text-xs text-slate-400 mb-1">1. 攔截之原始推論指令：</div>
-                                                        <div className="text-rose-400 font-mono text-xs bg-slate-900 p-2 rounded border border-rose-900/50 break-words line-through">
-                                                            {item.rawCmd}
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-emerald-400 mb-1">2. AI自動建議修復後指令：</div>
-                                                        <div className="text-emerald-300 font-mono text-xs bg-emerald-950/30 p-2 rounded border border-emerald-900/50 break-words">
-                                                            {item.aiSuggestedCmd}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
                                                 <div className="flex gap-2">
-                                                    <button 
-                                                        onClick={() => processHumanAction(item, 'ALLOW')} 
-                                                        className="flex-1 bg-emerald-700 hover:bg-emerald-600 py-2 rounded text-sm font-bold transition-colors text-white"
-                                                    >
-                                                        ALLOW (採用建議)
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => processHumanAction(item, 'DENY')} 
-                                                        className="flex-1 bg-rose-700 hover:bg-rose-600 py-2 rounded text-sm font-bold transition-colors text-white"
-                                                    >
-                                                        DENY (直接廢棄)
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleManualEdit(item)} 
-                                                        className="flex-1 bg-blue-700 hover:bg-blue-600 py-2 rounded text-sm font-bold transition-colors text-white"
-                                                    >
-                                                        手動修復 (MANUAL)
-                                                    </button>
+                                                    <button onClick={() => processHumanAction(item, 'ALLOW')} className="flex-1 bg-emerald-700 py-2 rounded text-xs font-bold">ALLOW (採用建議)</button>
+                                                    <button onClick={() => processHumanAction(item, 'DENY')} className="flex-1 bg-rose-700 py-2 rounded text-xs font-bold">DENY (廢棄任務)</button>
+                                                    <button onClick={() => {const edit = prompt('手動修復指令:', item.rawCmd); if(edit) processHumanAction(item, 'MANUAL', edit)}} className="flex-1 bg-blue-700 py-2 rounded text-xs font-bold">MANUAL (手動修復)</button>
                                                 </div>
                                             </div>
                                         ))
@@ -323,7 +262,6 @@
                             </div>
                         </div>
                     )}
-
                 </div>
             );
         };
