@@ -15,7 +15,7 @@
             color: #0f172a; 
             font-family: ui-monospace, SFMono-Regular, Consolas, monospace; 
             overflow: hidden; 
-            font-size: 16px; /* 提升基礎字體 */
+            font-size: 16px; 
         }
         .custom-scrollbar::-webkit-scrollbar { width: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f0fdfa; }
@@ -46,7 +46,7 @@
             const [healingLogs, setHealingLogs] = useState([]);
             const [evidenceLogs, setEvidenceLogs] = useState([]);
 
-            const counterRef = useRef(500120); // 模擬轉帳序號
+            const counterRef = useRef(700240); 
             const prevHashRef = useRef("00000000000000000000000000000000");
 
             const mockHash = (str) => {
@@ -64,36 +64,35 @@
                 const txnID = `TXN-${counterRef.current}`;
                 const rand = Math.random();
                 let error = null;
-                let rawCmd = `{"to":"ACC-8872", "amount":25000, "ccy":"TWD"}`;
+                let rawCmd = `{"to":"ACC-8872", "amount":50000, "ccy":"TWD"}`;
 
                 // 模擬 AI 推論偏移場景
                 if (rand > 0.98) {
-                    error = { id: txnID, type: 'malicious', rawCmd: `{"amount":-1000, "ccy":"TWD"}`, msg: "嚴重：檢出負數轉帳" };
+                    error = { id: txnID, type: 'malicious', rawCmd: `{"amount":-5000, "ccy":"TWD"}`, msg: "嚴重：檢出負數轉帳" };
                 } else if (rand > 0.94) {
-                    error = { id: txnID, type: 'require_human', rawCmd: `{"amount":25000, "ccy":"USD"}`, aiFixed: `{"amount":25000, "ccy":"TWD"}`, msg: "疑義：幣別偏移(USD限制)" };
+                    error = { id: txnID, type: 'require_human', rawCmd: `{"amount":50000, "ccy":"USD"}`, aiFixed: `{"amount":50000, "ccy":"TWD"}`, msg: "疑義：幣別偏移(USD限制)" };
                 } else if (rand > 0.90) {
-                    error = { id: txnID, type: 'typo', rawCmd: `{"amount":"25000", "ccy":"TWD"}`, aiFixed: `{"amount":25000, "ccy":"TWD"}`, msg: "偏移：格式型別錯誤" };
+                    error = { id: txnID, type: 'typo', rawCmd: `{"amount":"50000", "ccy":"TWD"}`, aiFixed: `{"amount":50000, "ccy":"TWD"}`, msg: "偏移：格式型別錯誤" };
                 }
 
-                // 1. MPU 推論階段紀錄
-                setPipelineLogs(l => [{ id: txnID, cmd: rawCmd, type: error?.type || 'normal', time: getTime() }, ...l].slice(0, 20));
+                // 1. MPU 推論階段
+                setPipelineLogs(l => [{ id: txnID, cmd: rawCmd, type: error?.type || 'normal', time: getTime() }, ...l].slice(0, 15));
 
-                // 2. MCU 即時裁決 (單筆處理)
+                // 2. MCU 即時裁決
                 setTimeout(() => {
                     if (!error) {
-                        setAdjudicationLogs(l => [{ id: txnID, status: 'O', msg: '裁決：合規准予執行', time: getTime() }, ...l].slice(0, 20));
+                        setAdjudicationLogs(l => [{ id: txnID, status: 'O', msg: '裁決：合規准予執行', time: getTime() }, ...l].slice(0, 15));
                         generateEvidence(txnID, 'TXN_ALLOW');
                     } else if (error.type === 'typo') {
-                        setAdjudicationLogs(l => [{ id: txnID, status: '-', msg: '檢測偏移：啟動自動校準', time: getTime() }, ...l].slice(0, 20));
-                        setHealingLogs(l => [{ id: txnID, from: error.rawCmd, to: error.aiFixed, sim: '99% 格式校準' }, ...l].slice(0, 20));
+                        setAdjudicationLogs(l => [{ id: txnID, status: '-', msg: '檢測偏移：自動格式校準', time: getTime() }, ...l].slice(0, 15));
+                        setHealingLogs(l => [{ id: txnID, from: error.rawCmd, to: error.aiFixed, sim: '99% 格式校準' }, ...l].slice(0, 15));
                         generateEvidence(txnID, 'AUTO_HEAL');
                     } else {
-                        // 惡意或需人工審查：進入異常池，不影響後續交易
-                        setAdjudicationLogs(l => [{ id: txnID, status: 'X', msg: error.msg, time: getTime() }, ...l].slice(0, 20));
+                        setAdjudicationLogs(l => [{ id: txnID, status: 'X', msg: error.msg, time: getTime() }, ...l].slice(0, 15));
                         setHumanQueue(q => [...q, { id: txnID, error, time: getTime() }]);
                         generateEvidence(txnID, error.type === 'malicious' ? 'HARD_BLOCK' : 'PENDING_REVIEW');
                     }
-                }, 50);
+                }, 100);
 
                 counterRef.current += 1;
             };
@@ -102,7 +101,7 @@
                 const newHash = mockHash(`${id}${action}${prevHashRef.current}`);
                 setEvidenceLogs(prev => [{ 
                     id, time: getTime(), action, hash: newHash 
-                }, ...prev].slice(0, 30));
+                }, ...prev].slice(0, 20));
                 prevHashRef.current = newHash;
             };
 
@@ -121,47 +120,51 @@
             };
 
             useEffect(() => {
-                const speed = demoSpeed === 'realtime' ? 100 : 1000; 
+                const speed = demoSpeed === 'realtime' ? 100 : 1500; 
                 const interval = setInterval(tick, speed);
                 return () => clearInterval(interval);
             }, [isRunning, demoSpeed]);
 
             return (
-                <div className="h-screen p-6 flex flex-col gap-6 relative">
-                    <header className="flex justify-between items-center pb-4 border-b-2 border-teal-200">
+                <div className="h-screen p-6 flex flex-col gap-4 relative">
+                    <header className="flex justify-between items-center">
                         <div className="flex flex-col">
-                            <h1 className="text-3xl font-black text-teal-900 uppercase tracking-tighter">ARDUINO-Q 開發板 MPU邊緣運算+MCU(TrustZone-M) 金融執行官治理平台</h1>
-                            <div className="flex items-center gap-4 mt-2 font-mono">
-                                <span className="px-3 py-1 bg-teal-800 text-white text-sm rounded">單筆原子化裁決模式 ACTIVE</span>
-                                <span className="text-teal-600 font-bold text-lg">系統時間: {getTime()}</span>
-                            </div>
+                            <h1 className="text-3xl font-black text-teal-900 uppercase tracking-tighter">Arduino-Q 企業 AI 財務執行官治理平台</h1>
                         </div>
                         <div className="flex items-center gap-4">
-                            <div className="flex bg-teal-100 rounded-lg p-1 border-2 border-teal-200 shadow-inner">
-                                <button onClick={() => setDemoSpeed('realtime')} className={`px-6 py-2 rounded-md text-sm font-black transition-all ${demoSpeed === 'realtime' ? 'bg-teal-600 text-white shadow-md' : 'text-teal-500'}`}>實時傳輸</button>
-                                <button onClick={() => setDemoSpeed('slow')} className={`px-6 py-2 rounded-md text-sm font-black transition-all ${demoSpeed === 'slow' ? 'bg-amber-600 text-white shadow-md' : 'text-teal-500'}`}>降速展示</button>
+                            <div className="flex bg-teal-100 rounded-lg p-1 border-2 border-teal-200">
+                                <button onClick={() => setDemoSpeed('realtime')} className={`px-6 py-1.5 rounded-md text-sm font-black transition-all ${demoSpeed === 'realtime' ? 'bg-teal-600 text-white shadow-md' : 'text-teal-500'}`}>實時模式</button>
+                                <button onClick={() => setDemoSpeed('slow')} className={`px-6 py-1.5 rounded-md text-sm font-black transition-all ${demoSpeed === 'slow' ? 'bg-amber-600 text-white shadow-md' : 'text-teal-500'}`}>展示模式</button>
                             </div>
-                            <button onClick={() => setIsModalOpen(true)} className="bg-white border-2 border-rose-300 text-rose-600 px-6 py-2.5 rounded-lg text-lg font-black hover:bg-rose-50 transition-all shadow-lg">
+                            <button onClick={() => setIsModalOpen(true)} className="bg-white border-2 border-rose-300 text-rose-600 px-5 py-2 rounded-lg text-base font-black hover:bg-rose-50 transition-all shadow-md">
                                 風控池 <span className="bg-rose-600 text-white px-3 py-0.5 rounded-full ml-2">{humanQueue.length}</span>
                             </button>
-                            <button onClick={() => setIsRunning(!isRunning)} className={`px-8 py-2.5 rounded-lg text-lg font-black text-white shadow-xl transition-all ${isRunning ? 'bg-teal-800' : 'bg-emerald-600'}`}>
-                                {isRunning ? '暫停管線' : '啟動防護'}
+                            <button onClick={() => setIsRunning(!isRunning)} className={`px-8 py-2 rounded-lg text-base font-black text-white shadow-lg transition-all ${isRunning ? 'bg-teal-800' : 'bg-emerald-600'}`}>
+                                {isRunning ? '暫停' : '啟動'}
                             </button>
                         </div>
                     </header>
 
-                    <div className="grid grid-cols-2 grid-rows-2 gap-6 flex-1 overflow-hidden">
-                        {/* 1. MPU 邊緣執行管線 */}
+                    {/* 新增系統情境說明字卡 */}
+                    <div className="bg-white border-l-8 border-teal-600 p-5 rounded-r-xl shadow-sm">
+                        <h3 className="text-teal-800 font-black text-lg mb-1">硬體裁決邊界展示場景說明</h3>
+                        <p className="text-teal-900/80 text-base font-bold leading-relaxed">
+                            本展示模擬企業內部 AI 財務代理人在邊緣裝置上生成交易指令之完整流程。所有推論結果必須先經由 MCU 之 TrustZone-M 硬體隔離區塊進行即時裁決後，方可進入核心交易系統。
+                            裁決層不依賴作業系統權限控管，而是透過實體隔離與硬體閘控機制，對每一筆交易進行原子化審核與強制阻斷。
+                            若檢測到語義偏移、格式異常或潛在風險指令，系統將觸發自動修復或人工審查流程；所有裁決結果均同步生成硬體證據鏈紀錄，以確保可驗證、可追溯與不可繞過之治理邊界。
+                            本場景旨在展示：在非確定性 AI 推論與金融核心系統之間，如何建立一個具物理強制力的最終決策閥門。
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 grid-rows-2 gap-6 flex-1 overflow-hidden mt-2">
+                        {/* 1. MPU 階段 */}
                         <div className="panel-bg rounded-xl flex flex-col overflow-hidden">
-                            <div className="bg-teal-800 px-4 py-3 text-lg font-black text-white flex justify-between">
-                                <span>[1] MPU 推論交易流 (非確定性)</span>
-                                <span className="animate-pulse">● 推論中</span>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                            <div className="bg-teal-800 px-4 py-3 text-lg font-black text-white"> [1] MPU 推論交易流 (非確定性生成)</div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                                 {pipelineLogs.map((log, i) => (
-                                    <div key={i} className="log-entry text-base font-mono flex gap-4 border-b border-teal-50 pb-1">
-                                        <span className="text-teal-500 font-bold w-32">[{log.time}]</span>
-                                        <span className="text-teal-800 font-bold w-32">{log.id}</span>
+                                    <div key={i} className="log-entry text-base font-mono flex gap-4 border-b border-teal-50 pb-2">
+                                        <span className="text-teal-400 font-bold">[{log.time}]</span>
+                                        <span className="text-teal-800 font-bold">{log.id}</span>
                                         <span className={log.type !== 'normal' ? 'text-rose-600 font-black' : 'text-slate-500'}>{log.cmd}</span>
                                     </div>
                                 ))}
@@ -170,10 +173,10 @@
 
                         {/* 2. MCU 即時裁決 */}
                         <div className="panel-bg rounded-xl flex flex-col overflow-hidden">
-                            <div className="bg-teal-700 px-4 py-3 text-lg font-black text-white"> [2] MCU TrustZone-M 即時裁決 (單筆強制)</div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                            <div className="bg-teal-700 px-4 py-3 text-lg font-black text-white"> [2] MCU TrustZone-M 確定性裁決</div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                                 {adjudicationLogs.map((log, i) => (
-                                    <div key={i} className="log-entry text-base font-mono flex justify-between bg-teal-50/50 p-3 rounded-lg border-l-4 border-teal-500 mb-2">
+                                    <div key={i} className="log-entry text-base font-mono flex justify-between bg-teal-50/50 p-4 rounded-lg border-l-4 border-teal-500 shadow-sm">
                                         <span className="text-slate-700 font-bold"><span className="text-teal-600 mr-2">{log.id}</span> {log.msg}</span>
                                         <span className={`font-black text-xl ${log.status === 'O' ? 'text-teal-600' : 'text-amber-600'}`}>[{log.status}]</span>
                                     </div>
@@ -184,12 +187,12 @@
                         {/* 3. 邏輯校準 */}
                         <div className="panel-bg rounded-xl flex flex-col overflow-hidden">
                             <div className="bg-teal-600 px-4 py-3 text-lg font-black text-white"> [3] 邊緣自動修復中心 (Self-Healing)</div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                                 {healingLogs.map((log, i) => (
-                                    <div key={i} className="log-entry text-sm font-mono bg-teal-50 p-4 rounded-lg border-2 border-teal-100 shadow-sm">
-                                        <div className="text-teal-700 font-black text-base mb-2">{log.id} | {log.sim}</div>
-                                        <div className="text-rose-400 line-through truncate opacity-70">{log.from}</div>
-                                        <div className="text-teal-800 truncate font-black text-base">修正方案 ➔ {log.to}</div>
+                                    <div key={i} className="log-entry text-base font-mono bg-teal-50 p-4 rounded-lg border-2 border-teal-100">
+                                        <div className="text-teal-700 font-black mb-2">{log.id} | {log.sim}</div>
+                                        <div className="text-rose-400 line-through truncate opacity-60 italic">{log.from}</div>
+                                        <div className="text-teal-800 truncate font-black text-lg">修正 ➔ {log.to}</div>
                                     </div>
                                 ))}
                             </div>
@@ -197,58 +200,46 @@
 
                         {/* 4. 證據帳本 */}
                         <div className="panel-bg rounded-xl flex flex-col overflow-hidden">
-                            <div className="bg-teal-900 px-4 py-3 text-lg font-black text-white"> [4] 不可篡改治理帳本 (Hardware Evidence)</div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                            <div className="bg-teal-900 px-4 py-3 text-lg font-black text-white"> [4] 不可篡改治理帳本 (Evidence Chain)</div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                                 {evidenceLogs.map((log, i) => (
-                                    <div key={i} className="log-entry text-sm font-mono bg-slate-50 p-3 rounded-lg border-l-4 border-teal-900 flex flex-col shadow-sm">
+                                    <div key={i} className="log-entry text-sm font-mono bg-slate-50 p-3 rounded-lg border-l-4 border-teal-900 flex flex-col">
                                         <div className="flex justify-between font-black text-slate-800 text-base">
                                             <span>{log.id}</span>
                                             <span className="text-teal-700">{log.action}</span>
                                         </div>
-                                        <div className="text-slate-400 truncate text-xs mt-1">SECURE_HASH: {log.hash}</div>
+                                        <div className="text-slate-400 truncate text-[10px] mt-1">SECURE_HASH: {log.hash}</div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     </div>
 
-                    {/* 人工審查 Modal */}
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-50 p-10 backdrop-blur-md">
-                            <div className="bg-white rounded-2xl w-full max-w-6xl flex flex-col max-h-[90vh] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.5)] border-4 border-teal-600">
-                                <div className="bg-teal-600 px-8 py-6 rounded-t-xl flex justify-between items-center text-white font-black">
-                                    <span className="text-2xl">⚠️ 異步風控審查池 (Pending Adjudication)</span>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-4xl hover:scale-125 transition-transform">✕</button>
+                            <div className="bg-white rounded-2xl w-full max-w-6xl flex flex-col max-h-[90vh] shadow-2xl border-4 border-teal-600">
+                                <div className="bg-teal-600 px-8 py-6 flex justify-between items-center text-white font-black text-2xl">
+                                    <span>⚠️ 異步風控審查池 (Pending Adjudication)</span>
+                                    <button onClick={() => setIsModalOpen(false)}>✕</button>
                                 </div>
-                                <div className="p-8 overflow-y-auto space-y-8 custom-scrollbar bg-teal-50/20">
-                                    {humanQueue.length === 0 ? <div className="text-center py-32 text-slate-400 text-2xl italic font-bold">目前系統運行正常，無異常攔截筆數</div> :
+                                <div className="p-8 overflow-y-auto space-y-8 custom-scrollbar">
+                                    {humanQueue.length === 0 ? <div className="text-center py-32 text-slate-400 text-3xl font-bold italic">系統運行正常，無異常攔截筆數</div> :
                                         humanQueue.map((task) => (
-                                            <div key={task.id} className="bg-white rounded-xl p-6 border-2 border-teal-100 shadow-md">
-                                                <div className="text-teal-800 font-black text-xl mb-6 border-b-2 border-teal-50 pb-3 flex justify-between">
-                                                    <span>交易單號：{task.id}</span>
-                                                    <span className="text-rose-600 animate-pulse">檢測到重大風險行為</span>
-                                                </div>
-                                                <div className="grid grid-cols-12 gap-8 items-center bg-slate-50 p-6 rounded-xl border-2 border-slate-100">
-                                                    <div className="col-span-3">
-                                                        <div className="text-xs text-rose-500 font-black mb-2 uppercase">AI 原始偏移指令</div>
-                                                        <div className="text-rose-700 text-lg font-bold font-mono break-all line-through bg-rose-50 p-3 rounded-lg border border-rose-100">
-                                                            {task.error.rawCmd}
-                                                        </div>
+                                            <div key={task.id} className="bg-white rounded-xl p-8 border-2 border-teal-100 shadow-sm">
+                                                <div className="text-teal-800 font-black text-2xl mb-6 border-b-2 border-teal-50 pb-4">交易單號：{task.id}</div>
+                                                <div className="grid grid-cols-12 gap-10 items-center bg-slate-50 p-8 rounded-2xl">
+                                                    <div className="col-span-4">
+                                                        <div className="text-xs text-rose-500 font-black mb-3">AI 原始偏移指令</div>
+                                                        <div className="text-rose-700 text-xl font-bold font-mono break-all line-through bg-rose-50 p-4 rounded-xl">{task.error.rawCmd}</div>
                                                     </div>
-                                                    <div className="col-span-3">
-                                                        <div className="text-xs text-teal-600 font-black mb-2 uppercase">系統合規修正建議</div>
-                                                        <div className="text-teal-800 text-lg font-bold font-mono break-all bg-teal-50 p-3 rounded-lg border border-teal-100">
-                                                            {task.error.aiFixed || '無法自動校準'}
-                                                        </div>
+                                                    <div className="col-span-4">
+                                                        <div className="text-xs text-teal-600 font-black mb-3">系統合規修正建議</div>
+                                                        <div className="text-teal-800 text-xl font-bold font-mono break-all bg-teal-50 p-4 rounded-xl">{task.error.aiFixed || '無法自動校準'}</div>
                                                     </div>
-                                                    <div className="col-span-2 text-center">
-                                                        <div className="text-xs text-slate-400 font-black mb-2 uppercase">攔截時間</div>
-                                                        <div className="text-slate-600 font-bold">{task.time}</div>
-                                                    </div>
-                                                    <div className="col-span-4 flex gap-2">
-                                                        <button onClick={() => handleHumanAction(task, 'ALLOW')} className="flex-1 bg-teal-600 hover:bg-teal-700 py-4 rounded-xl text-lg font-black text-white shadow-lg active:scale-95 transition-all">核准放行</button>
-                                                        <button onClick={() => handleHumanAction(task, 'DENY')} className="flex-1 bg-rose-600 hover:bg-rose-700 py-4 rounded-xl text-lg font-black text-white shadow-lg active:scale-95 transition-all">永久阻斷</button>
-                                                        <button onClick={() => {const edit = prompt('手動覆寫交易數據:', task.error.rawCmd); if(edit) handleHumanAction(task, 'MANUAL', edit)}} className="flex-1 bg-slate-700 hover:bg-slate-800 py-4 rounded-xl text-lg font-black text-white shadow-lg active:scale-95 transition-all">手動修正</button>
+                                                    <div className="col-span-4 flex flex-col gap-3">
+                                                        <button onClick={() => handleHumanAction(task, 'ALLOW')} className="w-full bg-teal-600 py-4 rounded-xl text-xl font-black text-white hover:bg-teal-700 transition-all">核准放行</button>
+                                                        <button onClick={() => handleHumanAction(task, 'DENY')} className="w-full bg-rose-600 py-4 rounded-xl text-xl font-black text-white hover:bg-rose-700 transition-all">永久阻斷</button>
+                                                        <button onClick={() => {const edit = prompt('手動覆寫交易數據:', task.error.rawCmd); if(edit) handleHumanAction(task, 'MANUAL', edit)}} className="w-full bg-slate-700 py-4 rounded-xl text-xl font-black text-white">手動修正</button>
                                                     </div>
                                                 </div>
                                             </div>
